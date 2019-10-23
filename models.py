@@ -13,16 +13,16 @@ class WebObjExtractionNet(nn.Module):
             learnable_convnet: if True then convnet weights will be modified while training (default: False)
         """
         print('Initializing WebObjExtractionNet model...')
-        super(WebIENet, self).__init__()
+        super(WebObjExtractionNet, self).__init__()
         self.learnable_convnet = learnable_convnet
         
-        print('Using first few layers of Resnet18 as ConvNet Visual Feature Extractor')
+        print('\tUsing first few layers of Resnet18 as ConvNet Visual Feature Extractor')
         self.convnet = torchvision.models.resnet18(pretrained=True)
         modules = list(self.convnet.children())[:-5] # remove last few layers!
         self.convnet = nn.Sequential(*modules)
         
         if self.learnable_convnet == False:
-            print('ConvNet weights Freezed')
+            print('\tConvNet weights Freezed')
             for p in self.convnet.parameters(): # freeze weights
                 p.requires_grad = False
         
@@ -35,10 +35,10 @@ class WebObjExtractionNet(nn.Module):
         self.roi_pool = torchvision.ops.RoIPool(roi_output_size, spatial_scale)
         self.fc = nn.Linear(n_feat, n_classes)
         
-        print('Input batch of images:', _imgs.size())
-        print('ConvNet Feature Map:', _convnet_output_size)
-        print('RoI Pooling Spatial Scale:', spatial_scale)
-        print('Classifier 1st FC layer input features:', n_feat)
+        print('\tInput batch of images:', _imgs.size())
+        print('\tConvNet Feature Map:', _convnet_output_size)
+        print('\tRoI Pooling Spatial Scale:', spatial_scale)
+        print('\tClassifier 1st FC layer input features:', n_feat)
         print('-'*50)
     
     def forward(self, images, bboxes):
@@ -47,8 +47,6 @@ class WebObjExtractionNet(nn.Module):
             images: torch.Tensor of size [batch_size, 3, img_H, img_H]
             bboxes: list of torch.Tensor, each of size [n_bboxes, 4]
                 each of the 4 values correspond to [top_left_x, top_left_y, bottom_right_x, bottom_right_y]
-        
-        TODO: CURRENTLY WORKS ONLY FOR BATCHSIZE=1 :-(
         
         Returns:
             prediction_scores: torch.Tensor of size [n_bboxes, n_classes]

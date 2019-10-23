@@ -25,7 +25,6 @@ class WebDataset(torchvision.datasets.VisionDataset):
         ## convert to 0 MEAN, 1 VAR ???
     
     def __getitem__(self, index):
-        ## TODO --> Currently might not work with >1 batch size since n_bboxes for all images is different
         """
         Args:
             index (int): Index in range [0, self.__len__ - 1]

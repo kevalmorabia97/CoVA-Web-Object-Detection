@@ -18,6 +18,39 @@ def accuracy(predictions, labels):
     return accuracy
 
 
+def custom_collate_fn(batch):
+    """
+    Since all images might have different number of BBoxes, to use batch_size > 1,
+    custom collate_fn has to be created that creates a batch
+    
+    Args:
+        batch: list of N=`batch_size` tuples. Example [(img_1, bboxes_1, labels_1), ..., (img_N, bboxes_N, labels_N)]
+    
+    Returns:
+        batch: contains images, bboxes, labels
+            images: torch.Tensor [N, 3, img_H, img_W]
+            bboxes: torch.Tensor [total_n_bboxes_in_batch, 5]
+                each each of [bath_img_index, top_left_x, top_left_y, bottom_right_x, bottom_right_y]
+            labels: torch.Tensor [total_n_bboxes_in_batch]
+    """
+    images, bboxes, labels = zip(*batch)
+    # images = (img_1, ..., img_N) each element of size [3, img_H, img_W]
+    # bboxes = (bboxes_1, ..., bboxes_N) each element of size [n_bboxes_in_image, 4]
+    # labels = (labels_1, ..., labels_N) each element of size [n_bboxes_in_image]
+    
+    images = torch.stack(images, 0)
+    
+    bboxes_with_batch_index = []
+    for i, bbox in enumerate(bboxes):
+        batch_indices = torch.Tensor([i]*bbox.size()[0]).view(-1,1)
+        bboxes_with_batch_index.append(torch.cat((batch_indices, bbox), dim=1))
+    bboxes_with_batch_index = torch.cat(bboxes_with_batch_index)
+    
+    labels = torch.cat(labels)
+    
+    return images, bboxes_with_batch_index, labels
+
+
 def count_parameters(model):
     """
     Return the number of trainable parameters in `model`
