@@ -4,25 +4,26 @@ import torchvision
 
 
 class WebObjExtractionNet(nn.Module):
-    def __init__(self, roi_output_size, img_H, n_classes, learnable_convnet=False):
+    def __init__(self, roi_output_size, img_H, n_classes, trainable_convnet=False):
         """
         Args:
             roi_output_size: Tuple (int, int) which will be output of the roi_pool layer for each channel of convnet_feature
             img_H: height of image given as input to the convnet. Image assumed to be of same W and H
             n_classes: num of classes for BBoxes
-            learnable_convnet: if True then convnet weights will be modified while training (default: False)
+            trainable_convnet: if True then convnet weights will be modified while training (default: False)
         """
         print('Initializing WebObjExtractionNet model...')
         super(WebObjExtractionNet, self).__init__()
-        self.learnable_convnet = learnable_convnet
+        self.n_classes = n_classes
+        self.trainable_convnet = trainable_convnet
         
-        print('\tUsing first few layers of Resnet18 as ConvNet Visual Feature Extractor')
+        print('Using first few layers of Resnet18 as ConvNet Visual Feature Extractor')
         self.convnet = torchvision.models.resnet18(pretrained=True)
         modules = list(self.convnet.children())[:-5] # remove last few layers!
         self.convnet = nn.Sequential(*modules)
         
-        if self.learnable_convnet == False:
-            print('\tConvNet weights Freezed')
+        if self.trainable_convnet == False:
+            print('ConvNet weights Freezed')
             for p in self.convnet.parameters(): # freeze weights
                 p.requires_grad = False
         
@@ -35,10 +36,8 @@ class WebObjExtractionNet(nn.Module):
         self.roi_pool = torchvision.ops.RoIPool(roi_output_size, spatial_scale)
         self.fc = nn.Linear(n_feat, n_classes)
         
-        print('\tInput batch of images:', _imgs.size())
-        print('\tConvNet Feature Map:', _convnet_output_size)
-        print('\tRoI Pooling Spatial Scale:', spatial_scale)
-        print('\tClassifier 1st FC layer input features:', n_feat)
+        print('ConvNet Feature Map size:', _convnet_output_size)
+        print(self)
         print('-'*50)
     
     def forward(self, images, bboxes):

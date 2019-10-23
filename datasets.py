@@ -41,6 +41,8 @@ class WebDataset(torchvision.datasets.VisionDataset):
         
         input_boxes = pkl_load('%s/%s.pkl' % (self.root, img_id))
         bboxes = torch.Tensor( np.concatenate((input_boxes['gt_boxes'], input_boxes['other_boxes']), axis=0) )
+        bboxes[:,2:] += bboxes[:,:2]
+        
         labels = torch.Tensor([1,2,3] + [0]*input_boxes['other_boxes'].shape[0]).long()
 
         return img, bboxes, labels
