@@ -1,13 +1,16 @@
+import numpy as np
 import time
 import torch
 
+from utils import print_and_log, print_confusion_matrix
 
-def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eval_loader=None, eval_interval=5):
+
+def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eval_loader=None, eval_interval=5, log_file='log.txt'):
     """
     Train the `model` (nn.Module) on data loaded by `train_loader` (torch.utils.data.DataLoader) for `n_epochs`.
     If eval_loader is not None, then evaluate performance on this dataset every `eval_interval` epochs!
     """
-    print('Training Model for %d epochs...' % (n_epochs))
+    print_and_log('Training Model for %d epochs...' % (n_epochs), log_file)
     model.train()
     for epoch in range(1, n_epochs+1):
         start = time.time()
@@ -30,17 +33,17 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
             loss.backward()
             optimizer.step()
 
-        print('[TRAIN]\t Epoch: %2d\t Loss: %.4f\t Accuracy: %.2f%% (%.2fs)' % (epoch, epoch_loss/n_bboxes, 100*epoch_correct_preds/n_bboxes, time.time()-start))
+        print_and_log('[TRAIN]\t Epoch: %2d\t Loss: %.4f\t Accuracy: %.2f%% (%.2fs)' % (epoch, epoch_loss/n_bboxes, 100*epoch_correct_preds/n_bboxes, time.time()-start), log_file)
         
         if epoch == 1 or epoch%eval_interval == 0 or epoch == n_epochs:
-            evaluate_model(model, eval_loader, criterion, device)
+            evaluate_model(model, eval_loader, criterion, device, log_file)
             model.train()
     
     print('Model Trained!')
     return model
 
 
-def evaluate_model(model, eval_loader, criterion, device):
+def evaluate_model(model, eval_loader, criterion, device, log_file='log.txt'):
     """
     Evaluate `model` (nn.Module) on data loaded by `eval_loader` (torch.utils.data.DataLoader)
     """
@@ -48,7 +51,9 @@ def evaluate_model(model, eval_loader, criterion, device):
     start = time.time()
     epoch_loss, epoch_correct_preds, n_bboxes = 0.0, 0.0, 0.0
     n_classes = model.n_classes
-    confusion_matrix = torch.zeros(n_classes, n_classes) # to get per class metrics
+    class_names = model.class_names
+    
+    confusion_matrix = np.zeros([n_classes, n_classes], dtype=np.int32) # to get per class metrics
     with torch.no_grad():
         for i, (images, bboxes, labels) in enumerate(eval_loader):
             images = images.to(device) # [batch_size, 3, img_H, img_W]
@@ -59,15 +64,17 @@ def evaluate_model(model, eval_loader, criterion, device):
             output = model(images, bboxes) # [total_n_bboxes_in_batch, n_classes]
             predictions = torch.softmax(output, dim=1).argmax(dim=1)
             for t, p in zip(labels.view(-1), predictions.view(-1)):
-                confusion_matrix[t.long(), p.long()] += 1
+                confusion_matrix[t.item(), p.item()] += 1
 
             loss = criterion(output, labels)
             epoch_loss += loss.item()
         
-        accuracy = confusion_matrix.diag().sum()/confusion_matrix.sum()
-        per_class_accuracy = confusion_matrix.diag()/confusion_matrix.sum(1)
+        accuracy = confusion_matrix.diagonal().sum()/confusion_matrix.sum()
+        per_class_accuracy = confusion_matrix.diagonal()/confusion_matrix.sum(1)
         
-        print('[EVAL]\t Loss: %.4f\t Accuracy: %.2f%% (%.2fs)' % (epoch_loss/n_bboxes, 100*accuracy, time.time()-start))
-        for c in range(n_classes):
-            print('Class %d: Accuracy: %.2f%%' % (c, 100*per_class_accuracy[c]))
+        print_and_log('[EVAL]\t Loss: %.4f\t Accuracy: %.2f%% (%.2fs)' % (epoch_loss/n_bboxes, 100*accuracy, time.time()-start), log_file)
+        print_confusion_matrix(confusion_matrix, class_names)
         print('')
+        for c in range(n_classes):
+            print_and_log('%10s Acc: %.2f%%' % (class_names[c], 100*per_class_accuracy[c]), log_file)
+        print_and_log('', log_file)

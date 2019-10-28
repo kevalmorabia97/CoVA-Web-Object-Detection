@@ -1,27 +1,42 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torchvision
 
+from utils import count_parameters
+
 
 class WebObjExtractionNet(nn.Module):
-    def __init__(self, roi_output_size, img_H, n_classes, trainable_convnet=False):
+    def __init__(self, roi_output_size, img_H, n_classes, backbone='resnet18', trainable_convnet=False, class_names=None):
         """
         Args:
             roi_output_size: Tuple (int, int) which will be output of the roi_pool layer for each channel of convnet_feature
             img_H: height of image given as input to the convnet. Image assumed to be of same W and H
             n_classes: num of classes for BBoxes
+            backbone: string stating which convnet feature extractor to use.
+                      Allowed backbones are [resnet18 (default)]
             trainable_convnet: if True then convnet weights will be modified while training (default: False)
+            class_names: list of n_classes string elements containing names of the classes (default: [0, 1, ..., n_classes-1])
         """
         print('Initializing WebObjExtractionNet model...')
         super(WebObjExtractionNet, self).__init__()
         self.n_classes = n_classes
+        self.backbone = backbone
         self.trainable_convnet = trainable_convnet
+        if class_names is None:
+            self.class_names = np.arange(self.n_classes).astype(str)
+        else:
+            self.class_names = class_names
         
-        print('Using first few layers of Resnet18 as ConvNet Visual Feature Extractor')
+        if self.backbone not in ['resnet18']:
+            self.backbone = 'resnet18'
+            print('Invalid backbone provided. Setting backbone to Resnet18')
+        
         self.convnet = torchvision.models.resnet18(pretrained=True)
         modules = list(self.convnet.children())[:-5] # remove last few layers!
-        self.convnet = nn.Sequential(*modules)
+        print('Using first few layers of \"%s\" as ConvNet Visual Feature Extractor' % self.backbone)
         
+        self.convnet = nn.Sequential(*modules)
         if self.trainable_convnet == False:
             print('ConvNet weights Freezed')
             for p in self.convnet.parameters(): # freeze weights
@@ -37,6 +52,7 @@ class WebObjExtractionNet(nn.Module):
         self.fc = nn.Linear(n_feat, n_classes)
         
         print('ConvNet Feature Map size:', _convnet_output_size)
+        print('Trainable parameters:', count_parameters(self))
         print(self)
         print('-'*50)
     
