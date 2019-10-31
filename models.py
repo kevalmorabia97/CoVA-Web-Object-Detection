@@ -7,14 +7,14 @@ from utils import count_parameters
 
 
 class WebObjExtractionNet(nn.Module):
-    def __init__(self, roi_output_size, img_H, n_classes, backbone='resnet18', trainable_convnet=False, class_names=None):
+    def __init__(self, roi_output_size, img_H, n_classes, backbone='resnet', trainable_convnet=False, class_names=None):
         """
         Args:
             roi_output_size: Tuple (int, int) which will be output of the roi_pool layer for each channel of convnet_feature
             img_H: height of image given as input to the convnet. Image assumed to be of same W and H
             n_classes: num of classes for BBoxes
             backbone: string stating which convnet feature extractor to use.
-                      Allowed backbones are [resnet18 (default)]
+                      Allowed backbones are [alexnet, resnet (default)]
             trainable_convnet: if True then convnet weights will be modified while training (default: False)
             class_names: list of n_classes string elements containing names of the classes (default: [0, 1, ..., n_classes-1])
         """
@@ -28,12 +28,17 @@ class WebObjExtractionNet(nn.Module):
         else:
             self.class_names = class_names
         
-        if self.backbone not in ['resnet18']:
-            self.backbone = 'resnet18'
-            print('Invalid backbone provided. Setting backbone to Resnet18')
+        if self.backbone not in ['alexnet', 'resnet']:
+            self.backbone = 'resnet'
+            print('Invalid backbone provided. Setting backbone to Resnet')
+            
+        if self.backbone == 'resnet':
+            self.convnet = torchvision.models.resnet18(pretrained=True)
+            modules = list(self.convnet.children())[:-5] # remove last few layers!
+        elif self.backbone == 'alexnet':
+            self.convnet = torchvision.models.alexnet(pretrained=True)
+            modules = list(self.convnet.features.children())[:7] # remove last few layers!
         
-        self.convnet = torchvision.models.resnet18(pretrained=True)
-        modules = list(self.convnet.children())[:-5] # remove last few layers!
         print('Using first few layers of \"%s\" as ConvNet Visual Feature Extractor' % self.backbone)
         
         self.convnet = nn.Sequential(*modules)

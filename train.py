@@ -52,7 +52,6 @@ def evaluate_model(model, eval_loader, criterion, device, log_file='log.txt'):
     epoch_loss, epoch_correct_preds, n_bboxes = 0.0, 0.0, 0.0
     n_classes = model.n_classes
     class_names = model.class_names
-    
     confusion_matrix = np.zeros([n_classes, n_classes], dtype=np.int32) # to get per class metrics
     with torch.no_grad():
         for i, (images, bboxes, labels) in enumerate(eval_loader):
@@ -76,5 +75,5 @@ def evaluate_model(model, eval_loader, criterion, device, log_file='log.txt'):
         print_confusion_matrix(confusion_matrix, class_names)
         print('')
         for c in range(n_classes):
-            print_and_log('%10s Acc: %.2f%%' % (class_names[c], 100*per_class_accuracy[c]), log_file)
+            print_and_log('%5s Acc: %.2f%%' % (class_names[c], 100*per_class_accuracy[c]), log_file)
         print_and_log('', log_file)
