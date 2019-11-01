@@ -45,8 +45,11 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
 
 def evaluate_model(model, eval_loader, criterion, device, log_file='log.txt'):
     """
-    Evaluate `model` (nn.Module) on data loaded by `eval_loader` (torch.utils.data.DataLoader)
+    Evaluate model (nn.Module) on data loaded by eval_loader (torch.utils.data.DataLoader)
+    eval_loader.batch_size SHOULD BE 1
     """
+    assert eval_loader.batch_size == 1
+    
     model.eval()
     start = time.time()
     epoch_loss, epoch_correct_preds, n_bboxes = 0.0, 0.0, 0.0
@@ -59,21 +62,37 @@ def evaluate_model(model, eval_loader, criterion, device, log_file='log.txt'):
             bboxes = bboxes.to(device) # [total_n_bboxes_in_batch, 5]
             labels = labels.to(device) # [total_n_bboxes_in_batch]
             n_bboxes += labels.size()[0]
-
             output = model(images, bboxes) # [total_n_bboxes_in_batch, n_classes]
-            predictions = torch.softmax(output, dim=1).argmax(dim=1)
-            for t, p in zip(labels.view(-1), predictions.view(-1)):
-                confusion_matrix[t.item(), p.item()] += 1
-
+            
+            price_bb = output[:, 1].argmax()
+            image_bb = output[:, 2].argmax()
+            title_bb = output[:, 3].argmax()
+            labels_flattened = labels.view(-1)
+            for j, l in enumerate(labels_flattened):
+                l = l.item()
+                if l > 0:
+                    if j == price_bb:
+                        confusion_matrix[l, 1] += 1
+                    elif j == image_bb:
+                        confusion_matrix[l, 2] += 1
+                    elif j == title_bb:
+                        confusion_matrix[l, 3] += 1
+                    else:
+                        confusion_matrix[l, 0] += 1
+            
+            if labels_flattened[price_bb].item() == 0:
+                confusion_matrix[0, 1] += 1
+            if labels_flattened[image_bb].item() == 0:
+                confusion_matrix[0, 2] += 1
+            if labels_flattened[title_bb].item() == 0:
+                confusion_matrix[0, 3] += 1
+            
             loss = criterion(output, labels)
             epoch_loss += loss.item()
         
-        accuracy = confusion_matrix.diagonal().sum()/confusion_matrix.sum()
         per_class_accuracy = confusion_matrix.diagonal()/confusion_matrix.sum(1)
-        
-        print_and_log('[EVAL]\t Loss: %.4f\t Accuracy: %.2f%% (%.2fs)' % (epoch_loss/n_bboxes, 100*accuracy, time.time()-start), log_file)
-        print_confusion_matrix(confusion_matrix, class_names)
-        print('')
-        for c in range(n_classes):
-            print_and_log('%5s Acc: %.2f%%' % (class_names[c], 100*per_class_accuracy[c]), log_file)
+        print_and_log('[EVAL]\t Loss: %.4f (%.2fs)' % (epoch_loss/n_bboxes, time.time()-start), log_file)
+        # print_confusion_matrix(confusion_matrix, class_names)
+        for c in range(1, n_classes):
+            print_and_log('%-5s Acc: %.2f%%' % (class_names[c], 100*per_class_accuracy[c]), log_file)
         print_and_log('', log_file)
