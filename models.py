@@ -18,7 +18,7 @@ class WebObjExtractionNet(nn.Module):
             trainable_convnet: if True then convnet weights will be modified while training (default: False)
             class_names: list of n_classes string elements containing names of the classes (default: [0, 1, ..., n_classes-1])
         """
-        print('Initializing WebObjExtractionNet model...')
+        print('Initializing WebObjExtractionNet...')
         super(WebObjExtractionNet, self).__init__()
         self.n_classes = n_classes
         self.backbone = backbone
