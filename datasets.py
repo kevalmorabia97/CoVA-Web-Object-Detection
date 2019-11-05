@@ -88,28 +88,36 @@ def custom_collate_fn(batch):
     return images, bboxes_with_batch_index, labels
 
 
-def load_data(data_dir, train_img_ids, test_img_ids, batch_size):
+def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, batch_size, num_workers=4):
     """
     Args:
         data_dir: directory which contains x.png Image and corresponding x.pkl BBox coordinates file
         train_img_ids: list of img_names to consider in train split
+        val_img_ids: list of img_names to consider in val split
         test_img_ids: list of img_names to consider in test split
         batch_size: size of batch in train_loader
     
     Returns:
-        train_loader, test_loader (torch.utils.data.DataLoader)
+        train_loader, val_loader, test_loader (torch.utils.data.DataLoader)
     """
+    assert np.intersect1d(train_img_ids, val_img_ids).size == 0
+    assert np.intersect1d(val_img_ids, test_img_ids).size == 0
     assert np.intersect1d(train_img_ids, test_img_ids).size == 0
     
     train_dataset = WebDataset(data_dir, train_img_ids)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4,
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
                               collate_fn=custom_collate_fn, drop_last=False)
 
+    val_dataset = WebDataset(data_dir, val_img_ids)
+    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=num_workers,
+                            collate_fn=custom_collate_fn, drop_last=False)
+    
     test_dataset = WebDataset(data_dir, test_img_ids)
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=4,
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=num_workers,
                              collate_fn=custom_collate_fn, drop_last=False)
     
     print('Train Images:', len(train_dataset))
+    print('Val Images:', len(val_dataset))
     print('Test  Images:', len(test_dataset))
     
-    return train_loader, test_loader
+    return train_loader, val_loader, test_loader

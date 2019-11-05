@@ -36,14 +36,14 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
         print_and_log('[TRAIN]\t Epoch: %2d\t Loss: %.4f\t Accuracy: %.2f%% (%.2fs)' % (epoch, epoch_loss/n_bboxes, 100*epoch_correct_preds/n_bboxes, time.time()-start), log_file)
         
         if epoch == 1 or epoch%eval_interval == 0 or epoch == n_epochs:
-            evaluate_model(model, eval_loader, criterion, device, log_file)
+            evaluate_model(model, eval_loader, criterion, device, 'VAL', log_file)
             model.train()
     
     print('Model Trained!')
     return model
 
 
-def evaluate_model(model, eval_loader, criterion, device, log_file='log.txt'):
+def evaluate_model(model, eval_loader, criterion, device, split_name='VAL', log_file='log.txt'):
     """
     Evaluate model (nn.Module) on data loaded by eval_loader (torch.utils.data.DataLoader)
     eval_loader.batch_size SHOULD BE 1
@@ -91,7 +91,8 @@ def evaluate_model(model, eval_loader, criterion, device, log_file='log.txt'):
             epoch_loss += loss.item()
         
         per_class_accuracy = confusion_matrix.diagonal()/confusion_matrix.sum(1)
-        print_and_log('[EVAL]\t Loss: %.4f (%.2fs)' % (epoch_loss/n_bboxes, time.time()-start), log_file)
+        avg_accuracy = per_class_accuracy[1:].mean() # accuracy of classes other than BG
+        print_and_log('[%s]\t Loss: %.4f\t Accuracy: %.2f%% (%.2fs)' % (split_name, epoch_loss/n_bboxes, 100*avg_accuracy, time.time()-start), log_file)
         # print_confusion_matrix(confusion_matrix, class_names)
         for c in range(1, n_classes):
             print_and_log('%-5s Acc: %.2f%%' % (class_names[c], 100*per_class_accuracy[c]), log_file)
