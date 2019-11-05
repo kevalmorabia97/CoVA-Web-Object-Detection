@@ -5,13 +5,17 @@ import torch
 from utils import print_and_log, print_confusion_matrix
 
 
-def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eval_loader=None, eval_interval=5, log_file='log.txt'):
+def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eval_loader, eval_interval=5, log_file='log.txt', ckpt_path='ckpt.pth'):
     """
     Train the `model` (nn.Module) on data loaded by `train_loader` (torch.utils.data.DataLoader) for `n_epochs`.
-    If eval_loader is not None, then evaluate performance on this dataset every `eval_interval` epochs!
+    evaluate performance on `eval_loader` dataset every `eval_interval` epochs and check for early stopping criteria!
     """
     print_and_log('Training Model for %d epochs...' % (n_epochs), log_file)
     model.train()
+
+    best_val_acc = 0.0
+    patience = 3 # number of VAL Acc values observed after best value to stop training
+    min_delta = 1e-5 # min improvement in val_acc value to be considered a valid improvement
     for epoch in range(1, n_epochs+1):
         start = time.time()
         epoch_loss, epoch_correct_preds, n_bboxes = 0.0, 0.0, 0.0
@@ -36,17 +40,28 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
         print_and_log('[TRAIN]\t Epoch: %2d\t Loss: %.4f\t Accuracy: %.2f%% (%.2fs)' % (epoch, epoch_loss/n_bboxes, 100*epoch_correct_preds/n_bboxes, time.time()-start), log_file)
         
         if epoch == 1 or epoch%eval_interval == 0 or epoch == n_epochs:
-            evaluate_model(model, eval_loader, criterion, device, 'VAL', log_file)
+            val_acc = evaluate_model(model, eval_loader, criterion, device, 'VAL', log_file)
             model.train()
+
+            if val_acc - best_val_acc > min_delta: # best so far so save checkpoint to restore later
+                best_val_acc = val_acc
+                patience_count = 0
+                torch.save(model.state_dict(), ckpt_path)
+            else:
+                patience_count += 1
+                if patience_count >= patience:
+                    model.load_state_dict(torch.load(ckpt_path))
+                    print('Early Stopping! Model restored to best Val performance checkpoint')
     
     print('Model Trained!')
-    return model
 
 
 def evaluate_model(model, eval_loader, criterion, device, split_name='VAL', log_file='log.txt'):
     """
     Evaluate model (nn.Module) on data loaded by eval_loader (torch.utils.data.DataLoader)
     eval_loader.batch_size SHOULD BE 1
+    
+    Returns: avg_accuracy of classes other than BG
     """
     assert eval_loader.batch_size == 1
     
@@ -97,3 +112,5 @@ def evaluate_model(model, eval_loader, criterion, device, split_name='VAL', log_
         for c in range(1, n_classes):
             print_and_log('%-5s Acc: %.2f%%' % (class_names[c], 100*per_class_accuracy[c]), log_file)
         print_and_log('', log_file)
+        
+        return avg_accuracy

@@ -42,7 +42,6 @@ NUM_WORKERS = args.num_workers # multithreaded data loading
 
 DATA_DIR = '../data/' # Contains .png and .pkl files for train and test data
 OUTPUT_DIR = 'results' # logs are saved here! 
-MODEL_SAVE_DIR = 'saved_models' # trained models are saved here!
 # NOTE: if same hyperparameter configuration is run again, previous log file and saved model will be overwritten
 
 SPLIT_DIR = 'splits/random' # contains train, val, test split files
@@ -53,8 +52,6 @@ TEST_SPLIT_ID_FILE = SPLIT_DIR + '/test_imgs.txt'
 
 if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)
-if not os.path.exists(MODEL_SAVE_DIR):
-    os.makedirs(MODEL_SAVE_DIR)
     
 train_img_ids = np.loadtxt(TRAIN_SPLIT_ID_FILE, dtype=np.int32)
 val_img_ids = np.loadtxt(VAL_SPLIT_ID_FILE, dtype=np.int32)
@@ -76,8 +73,8 @@ else:
     weights = torch.ones(N_CLASSES)
 
 params = '%s batch-%d roi-%d lr-%.0e wt_loss-%d' % (BACKBONE, BATCH_SIZE, ROI_POOL_OUTPUT_SIZE[0], LEARNING_RATE, WEIGHTED_LOSS)
-log_file = '%s/logs %s.txt' % (OUTPUT_DIR, params)
-model_save_file = '%s/saved_model %s.pth' % (MODEL_SAVE_DIR, params)
+log_file = '%s/%s logs.txt' % (OUTPUT_DIR, params)
+model_save_file = '%s/%s saved_model.pth' % (OUTPUT_DIR, params)
 
 print('logs will be saved in \"%s\"' % (log_file))
 print_and_log('Learning Rate: %.0e\n' % (LEARNING_RATE), log_file, 'w')
@@ -97,7 +94,7 @@ optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 criterion = nn.CrossEntropyLoss(weight=weights, reduction='sum').to(device)
 
 ########## TRAIN MODEL ##########
-model = train_model(model, train_loader, optimizer, criterion, N_EPOCHS, device, val_loader, EVAL_INTERVAL, log_file)
+train_model(model, train_loader, optimizer, criterion, N_EPOCHS, device, val_loader, EVAL_INTERVAL, log_file)
 
 ########## EVALUATE TEST PERFORMANCE ##########
 evaluate_model(model, test_loader, criterion, device, 'TEST', log_file)
