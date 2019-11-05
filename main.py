@@ -94,7 +94,7 @@ optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 criterion = nn.CrossEntropyLoss(weight=weights, reduction='sum').to(device)
 
 ########## TRAIN MODEL ##########
-train_model(model, train_loader, optimizer, criterion, N_EPOCHS, device, val_loader, EVAL_INTERVAL, log_file)
+train_model(model, train_loader, optimizer, criterion, N_EPOCHS, device, val_loader, EVAL_INTERVAL, log_file, 'ckpt_%d.pth' % args.device)
 
 ########## EVALUATE TEST PERFORMANCE ##########
 evaluate_model(model, test_loader, criterion, device, 'TEST', log_file)

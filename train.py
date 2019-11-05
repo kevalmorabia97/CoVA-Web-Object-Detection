@@ -50,9 +50,10 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
             else:
                 patience_count += 1
                 if patience_count >= patience:
-                    model.load_state_dict(torch.load(ckpt_path))
-                    print('Early Stopping! Model restored to best Val performance checkpoint')
+                    print('Early Stopping! Restoring model to best Val performance checkpoint...')
+                    break
     
+    model.load_state_dict(torch.load(ckpt_path))
     print('Model Trained!')
 
 
