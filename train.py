@@ -10,7 +10,7 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
     Train the `model` (nn.Module) on data loaded by `train_loader` (torch.utils.data.DataLoader) for `n_epochs`.
     evaluate performance on `eval_loader` dataset every `eval_interval` epochs and check for early stopping criteria!
     """
-    print_and_log('Training Model for %d epochs...' % (n_epochs), log_file)
+    print('Training Model for %d epochs...' % (n_epochs))
     model.train()
 
     best_val_acc = 0.0
@@ -50,11 +50,11 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
             else:
                 patience_count += 1
                 if patience_count >= patience:
-                    print('Early Stopping! Restoring model to best Val performance checkpoint...')
+                    print('Early Stopping!')
                     break
     
+    print('Model Trained! Restoring model to best Val performance checkpoint...')
     model.load_state_dict(torch.load(ckpt_path))
-    print('Model Trained!')
 
 
 def evaluate_model(model, eval_loader, criterion, device, split_name='VAL', log_file='log.txt'):
