@@ -67,7 +67,7 @@ def custom_collate_fn(batch):
         batch: contains images, bboxes, labels
             images: torch.Tensor [N, 3, img_H, img_W]
             bboxes: torch.Tensor [total_n_bboxes_in_batch, 5]
-                each each of [bath_img_index, top_left_x, top_left_y, bottom_right_x, bottom_right_y]
+                each each of [batch_img_index, top_left_x, top_left_y, bottom_right_x, bottom_right_y]
             labels: torch.Tensor [total_n_bboxes_in_batch]
     """
     images, bboxes, labels = zip(*batch)
@@ -116,8 +116,6 @@ def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, batch_size, nu
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=num_workers,
                              collate_fn=custom_collate_fn, drop_last=False)
     
-    print('Train Images:', len(train_dataset))
-    print('Val Images:', len(val_dataset))
-    print('Test  Images:', len(test_dataset))
+    print('# of Images\t Train: %d\t Val: %d\t Test: %d\n' % ( len(train_dataset), len(val_dataset), len(test_dataset) ))
     
     return train_loader, val_loader, test_loader

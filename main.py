@@ -15,13 +15,14 @@ from utils import print_and_log
 parser = argparse.ArgumentParser('Train Model')
 parser.add_argument('-d', '--device', type=int, default=0)
 parser.add_argument('-e', '--n_epochs', type=int, default=50)
-parser.add_argument('-lr', '--learning_rate', type=float, default=0.0005)
 parser.add_argument('-bb', '--backbone', type=str, default='alexnet', choices=['alexnet', 'resnet'])
+parser.add_argument('-tc', '--trainable_convnet', type=int, default=1, choices=[0,1])
+parser.add_argument('-lr', '--learning_rate', type=float, default=0.0005)
 parser.add_argument('-bs', '--batch_size', type=int, default=5)
 parser.add_argument('-wd', '--weight_decay', type=float, default=0.0)
 parser.add_argument('-r', '--roi', type=int, default=3)
 parser.add_argument('-w', '--weighted_loss', type=int, default=0, choices=[0,1])
-parser.add_argument('-tc', '--trainable_convnet', type=int, default=1, choices=[0,1])
+parser.add_argument('-pf', '--pos_feat', type=int, default=0, choices=[0,1])
 parser.add_argument('-nw', '--num_workers', type=int, default=4)
 args = parser.parse_args()
 
@@ -67,6 +68,7 @@ BATCH_SIZE = args.batch_size
 WEIGHT_DECAY = args.weight_decay
 ROI_POOL_OUTPUT_SIZE = (args.roi, args.roi)
 WEIGHTED_LOSS = bool(args.weighted_loss)
+POS_FEAT = bool(args.pos_feat)
 
 if WEIGHTED_LOSS:
     weights = torch.Tensor([1,100,100,100]) # weight inversely proportional to number of examples for the class
@@ -74,7 +76,7 @@ if WEIGHTED_LOSS:
 else:
     weights = torch.ones(N_CLASSES)
 
-params = '%s lr-%.0e batch-%d wd-%.0e roi-%d wt_loss-%d' % (BACKBONE, LEARNING_RATE, BATCH_SIZE, WEIGHT_DECAY, ROI_POOL_OUTPUT_SIZE[0], WEIGHTED_LOSS)
+params = '%s lr-%.0e batch-%d wd-%.0e roi-%d wt_loss-%d pf-%d' % (BACKBONE, LEARNING_RATE, BATCH_SIZE, WEIGHT_DECAY, ROI_POOL_OUTPUT_SIZE[0], WEIGHTED_LOSS, POS_FEAT)
 log_file = '%s/%s logs.txt' % (OUTPUT_DIR, params)
 model_save_file = '%s/%s saved_model.pth' % (OUTPUT_DIR, params)
 
@@ -85,13 +87,14 @@ print_and_log('Learning Rate: %.0e' % (LEARNING_RATE), log_file)
 print_and_log('Batch Size: %d' % (BATCH_SIZE), log_file)
 print_and_log('Weight Decay: %.0e' % (WEIGHT_DECAY), log_file)
 print_and_log('RoI Pool Output Size: (%d, %d)' % ROI_POOL_OUTPUT_SIZE, log_file)
-print_and_log('Weighted Loss: %s\n' % (WEIGHTED_LOSS), log_file)
+print_and_log('Weighted Loss: %s' % (WEIGHTED_LOSS), log_file)
+print_and_log('Position Features: %s\n' % (POS_FEAT), log_file)
 
 ########## DATA LOADERS ##########
 train_loader, val_loader, test_loader = load_data(DATA_DIR, train_img_ids, val_img_ids, test_img_ids, BATCH_SIZE, NUM_WORKERS)
 
 ########## CREATE MODEL & LOSS FN ##########
-model = WebObjExtractionNet(ROI_POOL_OUTPUT_SIZE, IMG_HEIGHT, N_CLASSES, BACKBONE, TRAINABLE_CONVNET, CLASS_NAMES).to(device)
+model = WebObjExtractionNet(ROI_POOL_OUTPUT_SIZE, IMG_HEIGHT, N_CLASSES, BACKBONE, TRAINABLE_CONVNET, POS_FEAT, CLASS_NAMES).to(device)
 
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 criterion = nn.CrossEntropyLoss(weight=weights, reduction='sum').to(device)
