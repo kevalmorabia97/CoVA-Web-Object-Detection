@@ -37,7 +37,7 @@ torch.manual_seed(seed)
 
 ########## PARAMETERS ##########
 N_CLASSES = 4
-CLASS_NAMES = ['BG', 'Price', 'Image', 'Title']
+CLASS_NAMES = ['BG', 'Price', 'Title', 'Image']
 IMG_HEIGHT = 1280 # Image assumed to have same height and width
 EVAL_INTERVAL = 5 # Number of Epochs after which model is evaluated
 NUM_WORKERS = args.num_workers # multithreaded data loading
