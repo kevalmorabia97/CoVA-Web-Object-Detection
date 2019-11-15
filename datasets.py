@@ -13,17 +13,21 @@ class WebDataset(torchvision.datasets.VisionDataset):
     """
     Class to load train/val/test datasets
     """
-    def __init__(self, root, img_ids):
+    def __init__(self, root, img_ids, max_bg_boxes=-1):
         """
         Args:
             root: directory where data is located
                 Must contain x.png Image and corresponding x.pkl BBox coordinates file
             img_ids: list of img_names to consider
+            max_bg_boxes: randomly sample this many number of background boxes (class 0) while training (default: -1 --> no sampling, take all)
+                All samples of class > 0 are always taken
+                NOTE: For val and test data, max_bg_boxes SHOULD be -1 (no sampling)
         """
         super(WebDataset, self).__init__(root)
         
         self.ids = img_ids
         self.img_transform = transforms.ToTensor()
+        self.max_bg_boxes = max_bg_boxes
         ## convert to 0 MEAN, 1 VAR ???
     
     def __getitem__(self, index):
@@ -42,10 +46,16 @@ class WebDataset(torchvision.datasets.VisionDataset):
         img = self.img_transform(img)
         
         input_boxes = pkl_load('%s/%s.pkl' % (self.root, img_id))
-        bboxes = torch.Tensor( np.concatenate((input_boxes['gt_boxes'], input_boxes['other_boxes']), axis=0) )
+        bg_boxes = input_boxes['other_boxes']
+
+        if self.max_bg_boxes > 0:
+            np.random.shuffle(bg_boxes)
+            bg_boxes = bg_boxes[:self.max_bg_boxes]
+
+        bboxes = torch.Tensor( np.concatenate((input_boxes['gt_boxes'], bg_boxes), axis=0) )
         bboxes[:,2:] += bboxes[:,:2]
         
-        labels = torch.Tensor([1,2,3] + [0]*input_boxes['other_boxes'].shape[0]).long()
+        labels = torch.Tensor([1,2,3] + [0]*len(bg_boxes)).long()
 
         return img, bboxes, labels
 
@@ -88,7 +98,7 @@ def custom_collate_fn(batch):
     return images, bboxes_with_batch_index, labels
 
 
-def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, batch_size, num_workers=4):
+def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, batch_size, num_workers=4, max_bg_boxes=-1):
     """
     Args:
         data_dir: directory which contains x.png Image and corresponding x.pkl BBox coordinates file
@@ -96,6 +106,9 @@ def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, batch_size, nu
         val_img_ids: list of img_names to consider in val split
         test_img_ids: list of img_names to consider in test split
         batch_size: size of batch in train_loader
+        max_bg_boxes: randomly sample this many number of background boxes (class 0) while training (default: -1 --> no sampling, take all)
+            All samples of class > 0 are always taken
+            NOTE: For val and test data, max_bg_boxes SHOULD be -1 (no sampling)
     
     Returns:
         train_loader, val_loader, test_loader (torch.utils.data.DataLoader)
@@ -104,18 +117,18 @@ def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, batch_size, nu
     assert np.intersect1d(val_img_ids, test_img_ids).size == 0
     assert np.intersect1d(train_img_ids, test_img_ids).size == 0
     
-    train_dataset = WebDataset(data_dir, train_img_ids)
+    train_dataset = WebDataset(data_dir, train_img_ids, max_bg_boxes)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
                               collate_fn=custom_collate_fn, drop_last=False)
 
-    val_dataset = WebDataset(data_dir, val_img_ids)
+    val_dataset = WebDataset(data_dir, val_img_ids, max_bg_boxes=-1)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=num_workers,
                             collate_fn=custom_collate_fn, drop_last=False)
     
-    test_dataset = WebDataset(data_dir, test_img_ids)
+    test_dataset = WebDataset(data_dir, test_img_ids, max_bg_boxes=-1)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=num_workers,
                              collate_fn=custom_collate_fn, drop_last=False)
     
-    print('# of Images\t Train: %d\t Val: %d\t Test: %d\n' % ( len(train_dataset), len(val_dataset), len(test_dataset) ))
+    print('---> No. of Images\t Train: %d\t Val: %d\t Test: %d\n' % ( len(train_dataset), len(val_dataset), len(test_dataset) ))
     
     return train_loader, val_loader, test_loader
