@@ -26,15 +26,11 @@ class WebObjExtractionNet(nn.Module):
         self.backbone = backbone
         self.trainable_convnet = trainable_convnet
         self.use_pos_feat = use_pos_feat
+        self.class_names = np.arange(self.n_classes).astype(str) if class_names is None else class_names
 
-        if class_names is None:
-            self.class_names = np.arange(self.n_classes).astype(str)
-        else:
-            self.class_names = class_names
-        
         if self.backbone not in ['alexnet', 'resnet']:
             self.backbone = 'alexnet'
-            print('Invalid backbone provided. Setting backbone to Alexnet')
+            print('---> Invalid backbone provided. Setting backbone to Alexnet')
             
         if self.backbone == 'resnet':
             self.convnet = torchvision.models.resnet18(pretrained=True)
@@ -42,32 +38,25 @@ class WebObjExtractionNet(nn.Module):
         elif self.backbone == 'alexnet':
             self.convnet = torchvision.models.alexnet(pretrained=True)
             modules = list(self.convnet.features.children())[:7] # remove last few layers!
-        
-        print('Using first few layers of \"%s\" as ConvNet Visual Feature Extractor' % self.backbone)
-        
+
+        print('Using first few layers of \"%s\" as Visual Feature Extractor' % self.backbone)        
         self.convnet = nn.Sequential(*modules)
         if self.trainable_convnet == False:
-            print('ConvNet weights Freezed')
+            print('---> ConvNet weights Freezed')
             for p in self.convnet.parameters(): # freeze weights
                 p.requires_grad = False
 
-        if self.use_pos_feat:
-            print('---> Using Position Features also!')
-            self.n_pos_feat = 4 # x,y,w,h of BBox
-            self.pos_feat_bn = nn.BatchNorm1d(self.n_pos_feat)
-        else:
-            self.n_pos_feat = 0
-        
         _imgs = torch.autograd.Variable(torch.Tensor(1, 3, self.img_H, self.img_H))
         _conv_feat = self.convnet(_imgs)
         _convnet_output_size = _conv_feat.size() # [1, C, H, W]
-        self.n_visual_feat = _convnet_output_size[1] * roi_output_size[0] * roi_output_size[1]
+        spatial_scale = _convnet_output_size[2]/self.img_H
 
+        self.n_visual_feat = _convnet_output_size[1] * roi_output_size[0] * roi_output_size[1]
+        self.n_pos_feat = 4 if self.use_pos_feat else 0 # x,y,w,h of BBox
         self.n_feat = self.n_visual_feat + self.n_pos_feat
         
-        spatial_scale = _convnet_output_size[2]/self.img_H
         self.roi_pool = torchvision.ops.RoIPool(roi_output_size, spatial_scale)
-        self.visual_feat_bn = nn.BatchNorm1d(self.n_visual_feat)
+        self.bn = nn.BatchNorm1d(self.n_feat)
         self.fc = nn.Linear(self.n_feat, n_classes)
         
         print('ConvNet Feature Map size:', _convnet_output_size)
@@ -90,17 +79,16 @@ class WebObjExtractionNet(nn.Module):
         conv_feat = self.convnet(images)
         pooled_feat = self.roi_pool(conv_feat, bboxes)
         pooled_feat = pooled_feat.view(pooled_feat.size()[0],-1)
-        pooled_feat = self.visual_feat_bn(pooled_feat)
 
         ##### POSITION FEATURES #####
         pos_feat = bboxes[:, :0] # size [n_bboxes, 0]
         if self.use_pos_feat:
             pos_feat = bboxes[:, 1:].clone()
             pos_feat[:, 2:] -= pos_feat[:, :2] # convert to [top_left_x, top_left_y, width, height]
-            pos_feat = self.pos_feat_bn(pos_feat)
 
         ##### FINAL FEATURE VECTOR #####
         combined_feat = torch.cat((pooled_feat, pos_feat), dim=1)
+        combined_feat = self.bn(combined_feat)
         output = self.fc(combined_feat)
 
         return output
