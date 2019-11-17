@@ -5,7 +5,7 @@ import torch
 from utils import print_and_log, print_confusion_matrix
 
 
-def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eval_loader, eval_interval=5, log_file='log.txt', ckpt_path='ckpt.pth'):
+def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eval_loader, eval_interval=3, log_file='log.txt', ckpt_path='ckpt.pth'):
     """
     Train the `model` (nn.Module) on data loaded by `train_loader` (torch.utils.data.DataLoader) for `n_epochs`.
     evaluate performance on `eval_loader` dataset every `eval_interval` epochs and check for early stopping criteria!
@@ -14,7 +14,7 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
     model.train()
 
     best_val_acc = 0.0
-    patience = 3 # number of VAL Acc values observed after best value to stop training
+    patience = 5 # number of VAL Acc values observed after best value to stop training
     min_delta = 1e-5 # min improvement in val_acc value to be considered a valid improvement
     for epoch in range(1, n_epochs+1):
         start = time.time()
@@ -28,7 +28,7 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
             optimizer.zero_grad()
 
             output = model(images, bboxes) # [total_n_bboxes_in_batch, n_classes]
-            predictions = torch.softmax(output, dim=1).argmax(dim=1)
+            predictions = output.argmax(dim=1)
             epoch_correct_preds += (predictions == labels).sum().item()
             
             loss = criterion(output, labels)

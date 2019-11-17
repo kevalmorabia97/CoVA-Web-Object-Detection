@@ -1,5 +1,4 @@
 import numpy as np
-import os
 from PIL import Image
 import torch
 from torch.utils.data import DataLoader
@@ -52,10 +51,10 @@ class WebDataset(torchvision.datasets.VisionDataset):
             np.random.shuffle(bg_boxes)
             bg_boxes = bg_boxes[:self.max_bg_boxes]
 
-        bboxes = torch.Tensor( np.concatenate((input_boxes['gt_boxes'], bg_boxes), axis=0) )
+        bboxes = torch.from_numpy( np.concatenate((input_boxes['gt_boxes'], bg_boxes), axis=0) )
         bboxes[:,2:] += bboxes[:,:2]
         
-        labels = torch.Tensor([1,2,3] + [0]*len(bg_boxes)).long()
+        labels = torch.LongTensor([1,2,3] + [0]*len(bg_boxes))
 
         return img, bboxes, labels
 

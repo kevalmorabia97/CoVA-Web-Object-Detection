@@ -18,7 +18,7 @@ parser.add_argument('-e', '--n_epochs', type=int, default=50)
 parser.add_argument('-bb', '--backbone', type=str, default='alexnet', choices=['alexnet', 'resnet'])
 parser.add_argument('-tc', '--trainable_convnet', type=int, default=1, choices=[0,1])
 parser.add_argument('-lr', '--learning_rate', type=float, default=0.0005)
-parser.add_argument('-bs', '--batch_size', type=int, default=5)
+parser.add_argument('-bs', '--batch_size', type=int, default=25)
 parser.add_argument('-mbb', '--max_bg_boxes', type=int, default=-1)
 parser.add_argument('-wd', '--weight_decay', type=float, default=0.0)
 parser.add_argument('-r', '--roi', type=int, default=3)
@@ -39,7 +39,7 @@ torch.manual_seed(seed)
 N_CLASSES = 4
 CLASS_NAMES = ['BG', 'Price', 'Title', 'Image']
 IMG_HEIGHT = 1280 # Image assumed to have same height and width
-EVAL_INTERVAL = 5 # Number of Epochs after which model is evaluated
+EVAL_INTERVAL = 3 # Number of Epochs after which model is evaluated
 NUM_WORKERS = args.num_workers # multithreaded data loading
 
 DATA_DIR = '/shared/data_product_info/v1_6k/' # Contains .png and .pkl files for train and test data
