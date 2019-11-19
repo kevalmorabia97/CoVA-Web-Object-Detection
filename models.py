@@ -1,13 +1,14 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision
 
 from utils import count_parameters
 
 
 class WebObjExtractionNet(nn.Module):
-    def __init__(self, roi_output_size, img_H, n_classes, backbone='alexnet', trainable_convnet=False, use_pos_feat=False, class_names=None):
+    def __init__(self, roi_output_size, img_H, n_classes, backbone='alexnet', trainable_convnet=False, drop_prob=0.2, use_pos_feat=False, class_names=None):
         """
         Args:
             roi_output_size: Tuple (int, int) which will be output of the roi_pool layer for each channel of convnet_feature
@@ -15,6 +16,7 @@ class WebObjExtractionNet(nn.Module):
             n_classes: num of classes for BBoxes
             backbone: string stating which convnet feature extractor to use. Allowed values: [alexnet (default), resnet]
             trainable_convnet: if True then convnet weights will be modified while training (default: False)
+            drop_prob: dropout probability (default: 0.2)
             use_pos_feat: if True, then concatenate x,y,w,h (normalized from 0 to 1) with convnet visual features for classification of a BBox (default: False)
             class_names: list of n_classes string elements containing names of the classes (default: [0, 1, ..., n_classes-1])
         """
@@ -56,8 +58,11 @@ class WebObjExtractionNet(nn.Module):
         self.n_feat = self.n_visual_feat + self.n_pos_feat
         
         self.roi_pool = torchvision.ops.RoIPool(roi_output_size, spatial_scale)
-        self.bn = nn.BatchNorm1d(self.n_feat)
-        self.fc = nn.Linear(self.n_feat, n_classes)
+        self.bn_feat = nn.BatchNorm1d(self.n_feat)
+        self.bn_fc1 = nn.BatchNorm1d(self.n_feat)
+        self.dropout1 = nn.Dropout(drop_prob)
+        self.fc1 = nn.Linear(self.n_feat, self.n_feat)
+        self.fc2 = nn.Linear(self.n_feat, n_classes)
         
         print('ConvNet Feature Map size:', _convnet_output_size)
         print('Trainable parameters:', count_parameters(self))
@@ -88,7 +93,11 @@ class WebObjExtractionNet(nn.Module):
 
         ##### FINAL FEATURE VECTOR #####
         combined_feat = torch.cat((pooled_feat, pos_feat), dim=1)
-        combined_feat = self.bn(combined_feat)
-        output = self.fc(combined_feat)
+        normalized_feat = self.bn_feat(combined_feat)
+        
+        ##### CLASSIFICATION LAYERS #####
+        output = F.relu(self.bn_fc1(self.fc1(normalized_feat)))
+        output = self.dropout1(output)
+        output = self.fc2(output)
 
         return output
