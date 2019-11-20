@@ -1,6 +1,7 @@
 import argparse
 import numpy as np
 import os
+import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -25,14 +26,17 @@ parser.add_argument('-r', '--roi', type=int, default=1)
 parser.add_argument('-dp', '--drop_prob', type=float, default=0.5)
 parser.add_argument('-pf', '--pos_feat', type=int, default=1, choices=[0,1])
 parser.add_argument('-nw', '--num_workers', type=int, default=4)
+parser.add_argument('-s', '--split', type=str, choices=['random', 'domain_wise'])
 args = parser.parse_args()
 
 device = torch.device('cuda:%d' % args.device if torch.cuda.is_available() else 'cpu')
 
 ########## MAKING RESULTS REPRODUCIBLE ##########
 seed = 1
+random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
 # torch.backends.cudnn.deterministic = True
 # torch.backends.cudnn.benchmark = False
 
@@ -47,7 +51,7 @@ DATA_DIR = '/shared/data_product_info/v1_6k/' # Contains .png and .pkl files for
 OUTPUT_DIR = 'results' # logs are saved here! 
 # NOTE: if same hyperparameter configuration is run again, previous log file and saved model will be overwritten
 
-SPLIT_DIR = 'splits/random' # contains train, val, test split files
+SPLIT_DIR = 'splits/' + args.split # contains train, val, test split files
 # each line in these files should contain name of the training image (without file extension)
 TRAIN_SPLIT_ID_FILE = SPLIT_DIR+ '/train_imgs.txt'
 VAL_SPLIT_ID_FILE = SPLIT_DIR + '/val_imgs.txt'
@@ -72,7 +76,7 @@ ROI_POOL_OUTPUT_SIZE = (args.roi, args.roi)
 DROP_PROB = args.drop_prob
 POS_FEAT = bool(args.pos_feat)
 
-params = '%s lr-%.0e batch-%d wd-%.0e roi-%d dp-%.2f pf-%d mbb-%d' % (BACKBONE, LEARNING_RATE, BATCH_SIZE, WEIGHT_DECAY, ROI_POOL_OUTPUT_SIZE[0], DROP_PROB, POS_FEAT, MAX_BG_BOXES)
+params = '%s %s lr-%.0e batch-%d wd-%.0e roi-%d dp-%.2f pf-%d mbb-%d' % (args.split, BACKBONE, LEARNING_RATE, BATCH_SIZE, WEIGHT_DECAY, ROI_POOL_OUTPUT_SIZE[0], DROP_PROB, POS_FEAT, MAX_BG_BOXES)
 log_file = '%s/%s logs.txt' % (OUTPUT_DIR, params)
 model_save_file = '%s/%s saved_model.pth' % (OUTPUT_DIR, params)
 
