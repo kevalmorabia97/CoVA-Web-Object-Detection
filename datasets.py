@@ -16,7 +16,7 @@ class WebDataset(torchvision.datasets.VisionDataset):
         """
         Args:
             root: directory where data is located
-                Must contain x.png Image and corresponding x.pkl BBox coordinates file
+                Must contain imgs/x.png Image and corresponding bboxes/x.pkl BBox coordinates file
             img_ids: list of img_names to consider
             max_bg_boxes: randomly sample this many number of background boxes (class 0) while training (default: -1 --> no sampling, take all)
                 All samples of class > 0 are always taken
@@ -41,20 +41,24 @@ class WebDataset(torchvision.datasets.VisionDataset):
         """
         img_id = self.ids[index]
         
-        img = Image.open('%s/%s.png' % (self.root, img_id)).convert('RGB')
+        img = Image.open('%s/imgs/%s.png' % (self.root, img_id)).convert('RGB')
         img = self.img_transform(img)
         
-        input_boxes = pkl_load('%s/%s.pkl' % (self.root, img_id))
-        bg_boxes = input_boxes['other_boxes']
-
+        bboxes = pkl_load('%s/bboxes/%s.pkl' % (self.root, img_id))
         if self.max_bg_boxes > 0:
-            np.random.shuffle(bg_boxes)
-            bg_boxes = bg_boxes[:self.max_bg_boxes]
+            bg_boxes = bboxes[bboxes[:,-1] == 0]
+            pos_boxes = bboxes[bboxes[:,-1] != 0]
 
-        bboxes = torch.from_numpy( np.concatenate((input_boxes['gt_boxes'], bg_boxes), axis=0) )
-        bboxes[:,2:] += bboxes[:,:2]
+            indices = np.random.permutation(len(bg_boxes))[:self.max_bg_boxes]
+            indices = np.sort(indices) # sort to preserve the preorder sequence order
+            bg_boxes = bg_boxes[indices]
+
+            bboxes = np.concatenate((pos_boxes, bg_boxes), axis=0)
+
+        labels = torch.LongTensor(bboxes[:,-1])
         
-        labels = torch.LongTensor([1,2,3] + [0]*len(bg_boxes))
+        bboxes = torch.Tensor(bboxes[:,:-1])
+        bboxes[:,2:] += bboxes[:,:2] # convert from [x,y,w,h] to [x1,y1,x2,y2]
 
         return img, bboxes, labels
 

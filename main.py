@@ -26,7 +26,7 @@ parser.add_argument('-r', '--roi', type=int, default=1)
 parser.add_argument('-dp', '--drop_prob', type=float, default=0.5)
 parser.add_argument('-pf', '--pos_feat', type=int, default=1, choices=[0,1])
 parser.add_argument('-nw', '--num_workers', type=int, default=4)
-parser.add_argument('-s', '--split', type=str, choices=['random', 'domain_wise'])
+parser.add_argument('-s', '--split', type=str, required=True)
 args = parser.parse_args()
 
 device = torch.device('cuda:%d' % args.device if torch.cuda.is_available() else 'cpu')
@@ -47,7 +47,7 @@ IMG_HEIGHT = 1280 # Image assumed to have same height and width
 EVAL_INTERVAL = 3 # Number of Epochs after which model is evaluated
 NUM_WORKERS = args.num_workers # multithreaded data loading
 
-DATA_DIR = '/shared/data_product_info/v1_6k/' # Contains .png and .pkl files for train and test data
+DATA_DIR = '/shared/data_product_info/v2_8.3k/' # Contains .png and .pkl files for train and test data
 OUTPUT_DIR = 'results' # logs are saved here! 
 # NOTE: if same hyperparameter configuration is run again, previous log file and saved model will be overwritten
 
