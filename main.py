@@ -5,8 +5,9 @@ import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.data import DataLoader
 
-from datasets import load_data
+from datasets import custom_collate_fn, load_data, WebDataset
 from models import WebObjExtractionNet
 from train import train_model, evaluate_model
 from utils import print_and_log
@@ -26,7 +27,6 @@ parser.add_argument('-r', '--roi', type=int, default=1)
 parser.add_argument('-dp', '--drop_prob', type=float, default=0.5)
 parser.add_argument('-pf', '--pos_feat', type=int, default=1, choices=[0,1])
 parser.add_argument('-nw', '--num_workers', type=int, default=4)
-parser.add_argument('-s', '--split', type=str, required=True)
 args = parser.parse_args()
 
 device = torch.device('cuda:%d' % args.device if torch.cuda.is_available() else 'cpu')
@@ -48,21 +48,18 @@ EVAL_INTERVAL = 3 # Number of Epochs after which model is evaluated
 NUM_WORKERS = args.num_workers # multithreaded data loading
 
 DATA_DIR = '/shared/data_product_info/v2_8.3k/' # Contains .png and .pkl files for train and test data
-OUTPUT_DIR = 'results' # logs are saved here! 
+OUTPUT_DIR = 'results' # logs are saved here!
 # NOTE: if same hyperparameter configuration is run again, previous log file and saved model will be overwritten
-
-SPLIT_DIR = 'splits/' + args.split # contains train, val, test split files
-# each line in these files should contain name of the training image (without file extension)
-TRAIN_SPLIT_ID_FILE = SPLIT_DIR+ '/train_imgs.txt'
-VAL_SPLIT_ID_FILE = SPLIT_DIR + '/val_imgs.txt'
-TEST_SPLIT_ID_FILE = SPLIT_DIR + '/test_imgs.txt'
 
 if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)
-    
-train_img_ids = np.loadtxt(TRAIN_SPLIT_ID_FILE, dtype=np.int32)
-val_img_ids = np.loadtxt(VAL_SPLIT_ID_FILE, dtype=np.int32)
-test_img_ids = np.loadtxt(TEST_SPLIT_ID_FILE, dtype=np.int32)
+
+SPLIT_DIR = 'splits'
+train_img_ids = np.loadtxt('%s/train_imgs.txt' % SPLIT_DIR, dtype=np.int32)
+val_img_ids = np.loadtxt('%s/val_imgs.txt' % SPLIT_DIR, dtype=np.int32)
+test_img_ids = np.loadtxt('%s/test_imgs.txt' % SPLIT_DIR, dtype=np.int32)
+
+test_domains = np.loadtxt('%s/test_domains.txt' % SPLIT_DIR, dtype=str) # for calculating macro accuracy
 
 ########## HYPERPARAMETERS ##########
 N_EPOCHS = args.n_epochs
@@ -76,8 +73,9 @@ ROI_POOL_OUTPUT_SIZE = (args.roi, args.roi)
 DROP_PROB = args.drop_prob
 POS_FEAT = bool(args.pos_feat)
 
-params = '%s %s lr-%.0e batch-%d wd-%.0e roi-%d dp-%.2f pf-%d mbb-%d' % (args.split, BACKBONE, LEARNING_RATE, BATCH_SIZE, WEIGHT_DECAY, ROI_POOL_OUTPUT_SIZE[0], DROP_PROB, POS_FEAT, MAX_BG_BOXES)
+params = '%s lr-%.0e batch-%d wd-%.0e roi-%d dp-%.2f pf-%d mbb-%d' % (BACKBONE, LEARNING_RATE, BATCH_SIZE, WEIGHT_DECAY, ROI_POOL_OUTPUT_SIZE[0], DROP_PROB, POS_FEAT, MAX_BG_BOXES)
 log_file = '%s/%s logs.txt' % (OUTPUT_DIR, params)
+test_acc_domainwise_file = '%s/%s test_acc_domainwise.csv' % (OUTPUT_DIR, params)
 model_save_file = '%s/%s saved_model.pth' % (OUTPUT_DIR, params)
 
 print('logs will be saved in \"%s\"' % (log_file))
@@ -104,7 +102,26 @@ criterion = nn.CrossEntropyLoss(reduction='sum').to(device)
 train_model(model, train_loader, optimizer, criterion, N_EPOCHS, device, val_loader, EVAL_INTERVAL, log_file, 'ckpt_%d.pth' % args.device)
 
 ########## EVALUATE TEST PERFORMANCE ##########
+print('Evaluating test data class wise accuracies...')
 evaluate_model(model, test_loader, criterion, device, 'TEST', log_file)
+
+with open (test_acc_domainwise_file, 'w') as f:
+    f.write('Domain,N_examples,%s,%s,%s\n' % (CLASS_NAMES[1], CLASS_NAMES[2], CLASS_NAMES[3]))
+
+print('Evaluating per domain accuracy for %d test domains...' % len(test_domains))
+for domain in test_domains:
+    print('\n---> Domain:', domain)
+    test_dataset = WebDataset(DATA_DIR, np.loadtxt('%s/domain_wise_imgs/%s.txt' % (SPLIT_DIR, domain), np.int32).reshape(-1), max_bg_boxes=-1)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=NUM_WORKERS, collate_fn=custom_collate_fn, drop_last=False)
+
+    per_class_acc = evaluate_model(model, test_loader, criterion, device, 'TEST')
+
+    with open (test_acc_domainwise_file, 'a') as f:
+        f.write('%s,%d,%.2f,%.2f,%.2f\n' % (domain, len(test_dataset), 100*per_class_acc[1], 100*per_class_acc[2], 100*per_class_acc[3]))
+
+macro_acc_test = np.loadtxt(test_acc_domainwise_file, delimiter=',', skiprows=1, dtype=str)[:,2:].astype(np.float32).mean(0)
+for i in range(1, len(CLASS_NAMES)):
+    print_and_log('%s Macro Acc: %.2f%%' % (CLASS_NAMES[i], macro_acc_test[i-1]), log_file)
 
 ########## SAVE MODEL ##########
 torch.save(model.state_dict(), model_save_file)
