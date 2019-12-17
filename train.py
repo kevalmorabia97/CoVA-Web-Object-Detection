@@ -13,9 +13,9 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
     print('Training Model for %d epochs...' % (n_epochs))
     model.train()
 
-    best_val_acc = 0.0
+    best_eval_acc = 0.0
     patience = 5 # number of VAL Acc values observed after best value to stop training
-    min_delta = 1e-5 # min improvement in val_acc value to be considered a valid improvement
+    min_delta = 1e-5 # min improvement in eval_acc value to be considered a valid improvement
     for epoch in range(1, n_epochs+1):
         start = time.time()
         epoch_loss, epoch_correct_preds, n_bboxes = 0.0, 0.0, 0.0
@@ -39,12 +39,13 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
 
         print_and_log('[TRAIN]\t Epoch: %2d\t Loss: %.4f\t Accuracy: %.2f%% (%.2fs)' % (epoch, epoch_loss/n_bboxes, 100*epoch_correct_preds/n_bboxes, time.time()-start), log_file)
         
-        if epoch == 1 or epoch%eval_interval == 0 or epoch == n_epochs:
-            val_acc = evaluate_model(model, eval_loader, criterion, device, 'VAL', log_file)
+        if epoch == 1 or epoch % eval_interval == 0 or epoch == n_epochs:
+            per_class_accuracy = evaluate_model(model, eval_loader, criterion, device, 'VAL', log_file)
+            eval_acc = per_class_accuracy[1:].mean()
             model.train()
 
-            if val_acc - best_val_acc > min_delta: # best so far so save checkpoint to restore later
-                best_val_acc = val_acc
+            if eval_acc - best_eval_acc > min_delta: # best so far so save checkpoint to restore later
+                best_eval_acc = eval_acc
                 patience_count = 0
                 torch.save(model.state_dict(), ckpt_path)
             else:
@@ -53,7 +54,7 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
                     print('Early Stopping!')
                     break
     
-    print('Model Trained! Restoring model to best Val performance checkpoint...')
+    print('Model Trained! Restoring model to best Eval performance checkpoint...')
     model.load_state_dict(torch.load(ckpt_path))
 
 
@@ -62,7 +63,7 @@ def evaluate_model(model, eval_loader, criterion, device, split_name='VAL', log_
     Evaluate model (nn.Module) on data loaded by eval_loader (torch.utils.data.DataLoader)
     eval_loader.batch_size SHOULD BE 1
     
-    Returns: avg_accuracy of classes other than BG
+    Returns: per_class_accuracy np.array of shape [n_classes,]
     """
     assert eval_loader.batch_size == 1
     
@@ -114,4 +115,4 @@ def evaluate_model(model, eval_loader, criterion, device, split_name='VAL', log_
             print_and_log('%-5s Acc: %.2f%%' % (class_names[c], 100*per_class_accuracy[c]), log_file)
         print_and_log('', log_file)
         
-        return avg_accuracy
+        return per_class_accuracy
