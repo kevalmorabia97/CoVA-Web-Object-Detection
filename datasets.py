@@ -25,9 +25,11 @@ class WebDataset(torchvision.datasets.VisionDataset):
         super(WebDataset, self).__init__(root)
         
         self.ids = img_ids
-        self.img_transform = transforms.ToTensor()
+        self.img_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize([0.8992, 0.8977, 0.8966], [0.2207, 0.2166, 0.2217]) # calculated on trainval data
+        ])
         self.max_bg_boxes = max_bg_boxes
-        ## convert to 0 MEAN, 1 VAR ???
     
     def __getitem__(self, index):
         """
@@ -50,7 +52,6 @@ class WebDataset(torchvision.datasets.VisionDataset):
             pos_boxes = bboxes[bboxes[:,-1] != 0]
 
             indices = np.random.permutation(len(bg_boxes))[:self.max_bg_boxes]
-            indices = np.sort(indices) # sort to preserve the preorder sequence order
             bg_boxes = bg_boxes[indices]
 
             bboxes = np.concatenate((pos_boxes, bg_boxes), axis=0)

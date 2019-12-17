@@ -1,22 +1,34 @@
 import matplotlib.pyplot as plt
 import os
 import pickle
-import torch
 
 
-def accuracy(predictions, labels):
+def compute_image_data_statistics(data_loader):
     """
-    Compute accuracy of predictions
-    
-    Args:
-        predictions: raw prediction scores as a float32 torch.Tensor of size [n_examples, n_classes]
-        labels: actual class labels as long torch.Tensor of size [n_examples]
+    Return the channel wise mean and std deviation for images loaded by `data_loader` (loads WebDataset defined in `datasets.py`)
     """
-    predicted_labels = torch.softmax(predictions, dim=1).argmax(dim=1)
-    corrects = (predicted_labels == labels).sum().float()
-    accuracy = corrects / float( labels.size(0) )
-    
-    return accuracy
+    mean = 0.
+    std = 0.
+    n_samples = 0.
+
+    for images, bboxes, labels in data_loader:
+        batch_samples = images.size(0)
+        images = images.view(batch_samples, images.size(1), -1)
+        mean += images.mean(2).sum(0)
+        std += images.std(2).sum(0)
+        n_samples += batch_samples
+
+    mean /= n_samples
+    std /= n_samples
+
+    return mean, std
+
+
+def count_parameters(model):
+    """
+    Return the number of trainable parameters in `model`
+    """
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 def create_dir(dir_path):
@@ -35,13 +47,6 @@ def create_dir(dir_path):
     print('Results will be saved to %s' % (dir_path))
 
     return dir_path
-
-
-def count_parameters(model):
-    """
-    Return the number of trainable parameters in `model`
-    """
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 def pkl_load(file_path):
