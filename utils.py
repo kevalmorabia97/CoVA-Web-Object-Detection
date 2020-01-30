@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
-import os
+import numpy as np
 import pickle
+from PIL import Image
 
 
 def compute_image_data_statistics(data_loader):
@@ -29,24 +30,6 @@ def count_parameters(model):
     Return the number of trainable parameters in `model`
     """
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-
-def create_dir(dir_path):
-    """
-    Create directory structure given as `dir_path`.
-    If path exists ask whether to overwrite it or make a new directory by appending time to it.
-
-    return: path to directory created
-    """
-    if os.path.exists(dir_path):
-        if input('[WARNING] Output directory exists! Overwrite results? ([y]/n): ').lower() == 'n':
-            dir_path += '[' + time.strftime('%y-%m-%d_%H%M%S', time.gmtime()) + ']'
-            os.makedirs(dir_path)
-    else:
-        os.makedirs(dir_path)
-    print('Results will be saved to %s' % (dir_path))
-
-    return dir_path
 
 
 def pkl_load(file_path):
@@ -84,19 +67,38 @@ def print_confusion_matrix(c, class_names=None):
         print( '%s\t\t%s' % (class_names[i], '\t'.join(c[i])) )
 
 
-def visualize_bbox(img, bboxes):
+def visualize_bbox(img_path, attn_wt_file, img_save_dir):
     """
-    Plot img and show all bboxes on the img
-    
-    Args:
-        img: PIL image
-        bboxes: numpy array or Tensor of size [n_bboxes, 4] 
-                i.e. n bboxes each of [top_left_x, top_left_y, bottom_right_x, bottom_right_y]
+    Plot img and show all context bboxes on the img with attention scores
+    Target BBox is bold black, context bbox is either green (score >= 0.2) or red (score < 0.2)
+    attn_wt_file is a csv file containing 3 rows, 5 + 10*context_size cols
+    Each row contains plot data for a target class (Price, Title, Image)
+    Cols: 4 bbox coords, 1 label, 2*context_size*4 context bbox coords, 2*context_size attnetion values that sum to 1
+
+    Save 3 files corresponding to 3 classes in img_save_dir (must exist)
     """
-    plt.imshow(img)
-    ax = plt.gca()
-    for bbox in bboxes:
-        ax.add_patch(plt.Rectangle((bbox[0], bbox[1]), bbox[2]-bbox[0], bbox[3]-bbox[1], fill=False, edgecolor='red', linewidth=2))
-    plt.axis('off')
-    plt.show()
-    
+    class_names = {0:'BG', 1:'Price', 2:'Title', 3:'Image'}
+
+    img = Image.open(img_path).convert('RGB')
+    plt_data = np.loadtxt(attn_wt_file, delimiter=',')
+    context_size = int((plt_data.shape[1] - 5) / 10)
+
+    plt.rcParams.update({'font.size': 6})
+    for row in plt_data:
+        plt.imshow(img)
+        plt.title('Attention Visualization for class: ' + class_names[int(row[4])])
+        ax = plt.gca()
+        ax.add_patch(plt.Rectangle((row[0], row[1]), row[2], row[3], fill=False, edgecolor='black', linewidth=2))
+        for c in range(1, 2*context_size+1):
+            if row[4*c+1] == 0 and row[4*c+2] == 0 and row[4*c+3] == 0 and row[4*c+4] == 0:
+                continue
+            if row[4*(2*context_size+1) + c] >= 0.2:
+                ax.text(row[4*c+1], row[4*c+2], '%.1f' % (100*row[4*(2*context_size+1) + c]))
+                color = 'green'
+            else:
+                color = 'red'
+            ax.add_patch(plt.Rectangle((row[4*c+1], row[4*c+2]), row[4*c+3], row[4*c+4], fill=False, edgecolor=color, linewidth=1))
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig('%s/%s_attn_%s.png' % (img_save_dir, img_path.rsplit('/',1)[-1][:-4], class_names[int(row[4])]), dpi=300, bbox_inches = 'tight', pad_inches = 0)
+        plt.close()

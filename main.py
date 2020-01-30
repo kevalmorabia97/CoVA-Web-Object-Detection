@@ -22,11 +22,11 @@ parser.add_argument('-tc', '--trainable_convnet', type=int, default=1, choices=[
 parser.add_argument('-lr', '--learning_rate', type=float, default=0.0005)
 parser.add_argument('-bs', '--batch_size', type=int, default=25)
 parser.add_argument('-mbb', '--max_bg_boxes', type=int, default=100)
-parser.add_argument('-wd', '--weight_decay', type=float, default=0.001)
+parser.add_argument('-wd', '--weight_decay', type=float, default=0)
 parser.add_argument('-r', '--roi', type=int, default=1)
 parser.add_argument('-dp', '--drop_prob', type=float, default=0.5)
 parser.add_argument('-pf', '--pos_feat', type=int, default=1, choices=[0,1])
-parser.add_argument('-nw', '--num_workers', type=int, default=4)
+parser.add_argument('-nw', '--num_workers', type=int, default=8)
 args = parser.parse_args()
 
 device = torch.device('cuda:%d' % args.device if torch.cuda.is_available() else 'cpu')
