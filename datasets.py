@@ -27,7 +27,7 @@ class WebDataset(torchvision.datasets.VisionDataset):
         self.ids = img_ids
         self.img_transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize([0.8992, 0.8977, 0.8966], [0.2207, 0.2166, 0.2217]) # calculated on trainval data
+            # transforms.Normalize([0.8992, 0.8977, 0.8966], [0.2207, 0.2166, 0.2217]) # calculated on trainval data
         ])
         self.max_bg_boxes = max_bg_boxes
     
