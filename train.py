@@ -19,15 +19,16 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
     for epoch in range(1, n_epochs+1):
         start = time.time()
         epoch_loss, epoch_correct_preds, n_bboxes = 0.0, 0.0, 0.0
-        for i, (images, bboxes, labels) in enumerate(train_loader):
+        for i, (images, bboxes, context_indices, labels) in enumerate(train_loader):
             images = images.to(device) # [batch_size, 3, img_H, img_W]
             bboxes = bboxes.to(device) # [total_n_bboxes_in_batch, 5]
+            context_indices = context_indices.to(device) # [total_n_bboxes_in_batch, 2 * context_size]
             labels = labels.to(device) # [total_n_bboxes_in_batch]
             n_bboxes += labels.size()[0]
             
             optimizer.zero_grad()
 
-            output = model(images, bboxes) # [total_n_bboxes_in_batch, n_classes]
+            output = model(images, bboxes, context_indices) # [total_n_bboxes_in_batch, n_classes]
             predictions = output.argmax(dim=1)
             epoch_correct_preds += (predictions == labels).sum().item()
             
@@ -74,12 +75,13 @@ def evaluate_model(model, eval_loader, criterion, device, split_name='VAL', log_
     class_names = model.class_names
     confusion_matrix = np.zeros([n_classes, n_classes], dtype=np.int32) # to get per class metrics
     with torch.no_grad():
-        for i, (images, bboxes, labels) in enumerate(eval_loader):
+        for i, (images, bboxes, context_indices, labels) in enumerate(eval_loader):
             images = images.to(device) # [batch_size, 3, img_H, img_W]
             bboxes = bboxes.to(device) # [total_n_bboxes_in_batch, 5]
+            context_indices = context_indices.to(device) # [total_n_bboxes_in_batch, 2 * context_size]
             labels = labels.to(device) # [total_n_bboxes_in_batch]
             n_bboxes += labels.size()[0]
-            output = model(images, bboxes) # [total_n_bboxes_in_batch, n_classes]
+            output = model(images, bboxes, context_indices) # [total_n_bboxes_in_batch, n_classes]
             
             price_bb = output[:, 1].argmax()
             image_bb = output[:, 2].argmax()
@@ -109,7 +111,7 @@ def evaluate_model(model, eval_loader, criterion, device, split_name='VAL', log_
         
         per_class_accuracy = confusion_matrix.diagonal()/confusion_matrix.sum(1)
         avg_accuracy = per_class_accuracy[1:].mean() # accuracy of classes other than BG
-        print_and_log('[%s]\t Loss: %.4f\t Accuracy: %.2f%% (%.2fs)' % (split_name, epoch_loss/n_bboxes, 100*avg_accuracy, time.time()-start), log_file)
+        print_and_log('[%s]\t Loss: %.4f\t Avg_class_Accuracy: %.2f%% (%.2fs)' % (split_name, epoch_loss/n_bboxes, 100*avg_accuracy, time.time()-start), log_file)
         # print_confusion_matrix(confusion_matrix, class_names)
         for c in range(1, n_classes):
             print_and_log('%-5s Acc: %.2f%%' % (class_names[c], 100*per_class_accuracy[c]), log_file)
