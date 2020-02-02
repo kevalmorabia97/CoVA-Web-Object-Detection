@@ -22,6 +22,7 @@ parser.add_argument('-tc', '--trainable_convnet', type=int, default=1, choices=[
 parser.add_argument('-lr', '--learning_rate', type=float, default=0.0005)
 parser.add_argument('-bs', '--batch_size', type=int, default=25)
 parser.add_argument('-cs', '--context_size', type=int, default=6)
+parser.add_argument('-att', '--attention', type=int, default=1, choices=[0,1])
 parser.add_argument('-hd', '--hidden_dim', type=int, default=300)
 parser.add_argument('-r', '--roi', type=int, default=1)
 parser.add_argument('-bbf', '--bbox_feat', type=int, default=1, choices=[0,1])
@@ -70,6 +71,7 @@ TRAINABLE_CONVNET = bool(args.trainable_convnet)
 LEARNING_RATE = args.learning_rate
 BATCH_SIZE = args.batch_size
 CONTEXT_SIZE = args.context_size
+USE_ATTENTION = bool(args.attention)
 HIDDEN_DIM = args.hidden_dim
 ROI_POOL_OUTPUT_SIZE = (args.roi, args.roi)
 USE_BBOX_FEAT = bool(args.bbox_feat)
@@ -77,8 +79,8 @@ WEIGHT_DECAY = args.weight_decay
 DROP_PROB = args.drop_prob
 MAX_BG_BOXES = args.max_bg_boxes if args.max_bg_boxes > 0 else -1
 
-params = '%s lr-%.0e batch-%d cs-%d hd-%d roi-%d bbf-%d wd-%.0e dp-%.2f mbb-%d' % (BACKBONE, LEARNING_RATE, BATCH_SIZE, CONTEXT_SIZE, HIDDEN_DIM,
-    ROI_POOL_OUTPUT_SIZE[0], USE_BBOX_FEAT, WEIGHT_DECAY, DROP_PROB, MAX_BG_BOXES)
+params = '%s lr-%.0e batch-%d cs-%d att-%d hd-%d roi-%d bbf-%d wd-%.0e dp-%.2f mbb-%d' % (BACKBONE, LEARNING_RATE, BATCH_SIZE, CONTEXT_SIZE, USE_ATTENTION,
+    HIDDEN_DIM, ROI_POOL_OUTPUT_SIZE[0], USE_BBOX_FEAT, WEIGHT_DECAY, DROP_PROB, MAX_BG_BOXES)
 log_file = '%s/%s logs.txt' % (OUTPUT_DIR, params)
 test_acc_domainwise_file = '%s/%s test_acc_domainwise.csv' % (OUTPUT_DIR, params)
 model_save_file = '%s/%s saved_model.pth' % (OUTPUT_DIR, params)
@@ -89,6 +91,7 @@ print_and_log('Trainable Convnet: %s' % (TRAINABLE_CONVNET), log_file)
 print_and_log('Learning Rate: %.0e' % (LEARNING_RATE), log_file)
 print_and_log('Batch Size: %d' % (BATCH_SIZE), log_file)
 print_and_log('Context Size: %d' % (CONTEXT_SIZE), log_file)
+print_and_log('Attention: %s' % (USE_ATTENTION), log_file)
 print_and_log('Hidden Dim: %d' % (HIDDEN_DIM), log_file)
 print_and_log('RoI Pool Output Size: (%d, %d)' % ROI_POOL_OUTPUT_SIZE, log_file)
 print_and_log('BBox Features: %s' % (USE_BBOX_FEAT), log_file)
@@ -100,7 +103,7 @@ print_and_log('Max BG Boxes: %d\n' % (MAX_BG_BOXES), log_file)
 train_loader, val_loader, test_loader = load_data(DATA_DIR, train_img_ids, val_img_ids, test_img_ids, CONTEXT_SIZE, BATCH_SIZE, NUM_WORKERS, MAX_BG_BOXES)
 
 ########## CREATE MODEL & LOSS FN ##########
-model = WebObjExtractionNet(ROI_POOL_OUTPUT_SIZE, IMG_HEIGHT, N_CLASSES, BACKBONE, CONTEXT_SIZE, HIDDEN_DIM, TRAINABLE_CONVNET, DROP_PROB,
+model = WebObjExtractionNet(ROI_POOL_OUTPUT_SIZE, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_ATTENTION, HIDDEN_DIM, TRAINABLE_CONVNET, DROP_PROB,
                             USE_BBOX_FEAT, CLASS_NAMES).to(device)
 
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
