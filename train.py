@@ -64,43 +64,38 @@ def evaluate_model(model, eval_loader, criterion, device, split_name='VAL', log_
     Returns: class_acc np.array of shape [n_classes,]
     """
     assert eval_loader.batch_size == 1
+    start = time.time()
     
     model.eval()
-    start = time.time()
     epoch_loss, n_bboxes = 0.0, 0.0
     n_classes = model.n_classes
-    class_names = model.class_names
     confusion_matrix = np.zeros([n_classes, n_classes], dtype=np.int32) # to get per class metrics
     with torch.no_grad():
         for i, (images, bboxes, context_indices, labels) in enumerate(eval_loader):
             labels = labels.to(device) # [total_n_bboxes_in_batch]
             n_bboxes += labels.shape[0]
 
+            output = model(images.to(device), bboxes.to(device), context_indices.to(device)) # [total_n_bboxes_in_batch, n_classes]
+            loss = criterion(output, labels)
+            epoch_loss += loss.item()
+            
             label_indices = torch.arange(labels.shape[0], device=device).view(-1,1)
             indexed_labels = torch.cat((label_indices, labels.view(-1,1)), dim=1)
             indexed_labels = indexed_labels[indexed_labels[:,-1] != 0] # labels for bbox other than BG
             
-            output = model(images.to(device), bboxes.to(device), context_indices.to(device)) # [total_n_bboxes_in_batch, n_classes]
             predictions = output.argmax(dim=0) # `n_classes` indices indicating predicted bbox for that class
             for c in range(1, n_classes):
                 true_bbox = indexed_labels[indexed_labels[:,-1] == c][0,0]
                 pred_bbox = predictions[c]
-                
-                if true_bbox == pred_bbox:
-                    confusion_matrix[c, c] += 1
-                else:
-                    confusion_matrix[c, 0] += 1
-            
-            loss = criterion(output, labels)
-            epoch_loss += loss.item()
-        
+                confusion_matrix[c, c if true_bbox == pred_bbox else 0] += 1
+
         confusion_matrix[0, 0] += 1 # to avoid div by 0
         class_acc = confusion_matrix.diagonal()/confusion_matrix.sum(1)
         avg_acc = class_acc[1:].mean() # accuracy of classes other than BG
-        print_and_log('[%s]\t Loss: %.4f\t Avg_class_Accuracy: %.2f%% (%.2fs)' % (split_name, epoch_loss/n_bboxes, 100*avg_acc, time.time()-start), log_file)
         
+        print_and_log('[%s]\t Loss: %.4f\t Avg_class_Accuracy: %.2f%% (%.2fs)' % (split_name, epoch_loss/n_bboxes, 100*avg_acc, time.time()-start), log_file)
         for c in range(1, n_classes):
-            print_and_log('%s Acc: %.2f%%' % (class_names[c], 100*class_acc[c]), log_file)
+            print_and_log('%s Acc: %.2f%%' % (model.class_names[c], 100*class_acc[c]), log_file)
         print_and_log('', log_file)
         
         return class_acc
