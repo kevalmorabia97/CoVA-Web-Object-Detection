@@ -123,12 +123,12 @@ print('Evaluating per domain accuracy for %d test domains...' % len(test_domains
 for domain in test_domains:
     print('\n---> Domain:', domain)
     test_dataset = WebDataset(DATA_DIR, np.loadtxt('%s/domain_wise_imgs/%s.txt' % (SPLIT_DIR, domain), np.int32).reshape(-1), CONTEXT_SIZE, max_bg_boxes=-1)
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=NUM_WORKERS, collate_fn=custom_collate_fn, drop_last=False)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=NUM_WORKERS, collate_fn=custom_collate_fn, drop_last=False, pin_memory=True)
 
-    per_class_acc = evaluate_model(model, test_loader, criterion, device, 'TEST')
+    class_acc = evaluate_model(model, test_loader, criterion, device, 'TEST')
 
     with open (test_acc_domainwise_file, 'a') as f:
-        f.write('%s,%d,%.2f,%.2f,%.2f\n' % (domain, len(test_dataset), 100*per_class_acc[1], 100*per_class_acc[2], 100*per_class_acc[3]))
+        f.write('%s,%d,%.2f,%.2f,%.2f\n' % (domain, len(test_dataset), 100*class_acc[1], 100*class_acc[2], 100*class_acc[3]))
 
 macro_acc_test = np.loadtxt(test_acc_domainwise_file, delimiter=',', skiprows=1, dtype=str)[:,2:].astype(np.float32).mean(0)
 for i in range(1, len(CLASS_NAMES)):

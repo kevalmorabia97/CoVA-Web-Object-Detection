@@ -143,15 +143,15 @@ def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, context_size, 
     
     train_dataset = WebDataset(data_dir, train_img_ids, context_size, max_bg_boxes)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
-                              collate_fn=custom_collate_fn, drop_last=False)
+                              collate_fn=custom_collate_fn, drop_last=False, pin_memory=True)
 
     val_dataset = WebDataset(data_dir, val_img_ids, context_size, max_bg_boxes=-1)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=num_workers,
-                            collate_fn=custom_collate_fn, drop_last=False)
+                            collate_fn=custom_collate_fn, drop_last=False, pin_memory=True)
     
     test_dataset = WebDataset(data_dir, test_img_ids, context_size, max_bg_boxes=-1)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=num_workers,
-                             collate_fn=custom_collate_fn, drop_last=False)
+                             collate_fn=custom_collate_fn, drop_last=False, pin_memory=True)
     
     print('---> No. of Images\t Train: %d\t Val: %d\t Test: %d\n' % ( len(train_dataset), len(val_dataset), len(test_dataset) ))
     

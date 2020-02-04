@@ -7,6 +7,7 @@ from PIL import Image
 def compute_image_data_statistics(data_loader):
     """
     Return the channel wise mean and std deviation for images loaded by `data_loader` (loads WebDataset defined in `datasets.py`)
+    Should be computer on train+val data
     """
     mean = 0.
     std = 0.
