@@ -123,7 +123,7 @@ print('Evaluating per domain accuracy for %d test domains...' % len(test_domains
 for domain in test_domains:
     print('\n---> Domain:', domain)
     test_dataset = WebDataset(DATA_DIR, np.loadtxt('%s/domain_wise_imgs/%s.txt' % (SPLIT_DIR, domain), np.int32).reshape(-1), CONTEXT_SIZE, max_bg_boxes=-1)
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=NUM_WORKERS, collate_fn=custom_collate_fn, drop_last=False, pin_memory=True)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=NUM_WORKERS, collate_fn=custom_collate_fn, drop_last=False)
 
     class_acc = evaluate_model(model, test_loader, criterion, device, 'TEST')
 

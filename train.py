@@ -59,11 +59,8 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
 def evaluate_model(model, eval_loader, criterion, device, split_name='VAL', log_file='log.txt'):
     """
     Evaluate model (nn.Module) on data loaded by eval_loader (torch.utils.data.DataLoader)
-    eval_loader.batch_size SHOULD BE 1
-    
     Returns: class_acc np.array of shape [n_classes,]
     """
-    assert eval_loader.batch_size == 1
     start = time.time()
     
     model.eval()
@@ -79,15 +76,20 @@ def evaluate_model(model, eval_loader, criterion, device, split_name='VAL', log_
             loss = criterion(output, labels)
             epoch_loss += loss.item()
             
-            label_indices = torch.arange(labels.shape[0], device=device).view(-1,1)
-            indexed_labels = torch.cat((label_indices, labels.view(-1,1)), dim=1)
-            indexed_labels = indexed_labels[indexed_labels[:,-1] != 0] # labels for bbox other than BG
-            
-            predictions = output.argmax(dim=0) # `n_classes` indices indicating predicted bbox for that class
-            for c in range(1, n_classes):
-                true_bbox = indexed_labels[indexed_labels[:,-1] == c][0,0]
-                pred_bbox = predictions[c]
-                confusion_matrix[c, c if true_bbox == pred_bbox else 0] += 1
+            batch_indices = torch.unique(bboxes[:,0])
+            for index in batch_indices: # for each image
+                img_indices = (bboxes[:,0] == index)
+                labels_img = labels[img_indices].view(-1,1)
+
+                label_indices = torch.arange(labels_img.shape[0], device=device).view(-1,1)
+                indexed_labels = torch.cat((label_indices, labels_img), dim=1)
+                indexed_labels = indexed_labels[indexed_labels[:,-1] != 0] # labels for bbox other than BG
+                
+                predictions = output[img_indices].argmax(dim=0) # `n_classes` indices indicating predicted bbox for that class
+                for c in range(1, n_classes):
+                    true_bbox = indexed_labels[indexed_labels[:,-1] == c][0,0]
+                    pred_bbox = predictions[c]
+                    confusion_matrix[c, c if true_bbox == pred_bbox else 0] += 1
 
         confusion_matrix[0, 0] += 1 # to avoid div by 0
         class_acc = confusion_matrix.diagonal()/confusion_matrix.sum(1)

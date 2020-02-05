@@ -132,7 +132,6 @@ def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, context_size, 
         batch_size: size of batch in train_loader
         max_bg_boxes: randomly sample this many number of background boxes (class 0) while training (default: -1 --> no sampling, take all)
             All samples of class > 0 are always taken
-            NOTE: For val and test data, max_bg_boxes SHOULD be -1 (no sampling)
     
     Returns:
         train_loader, val_loader, test_loader (torch.utils.data.DataLoader)
@@ -143,15 +142,15 @@ def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, context_size, 
     
     train_dataset = WebDataset(data_dir, train_img_ids, context_size, max_bg_boxes)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
-                              collate_fn=custom_collate_fn, drop_last=False, pin_memory=True)
+                              collate_fn=custom_collate_fn, drop_last=False)
 
     val_dataset = WebDataset(data_dir, val_img_ids, context_size, max_bg_boxes=-1)
-    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=num_workers,
-                            collate_fn=custom_collate_fn, drop_last=False, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=10, shuffle=False, num_workers=num_workers,
+                            collate_fn=custom_collate_fn, drop_last=False)
     
     test_dataset = WebDataset(data_dir, test_img_ids, context_size, max_bg_boxes=-1)
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=num_workers,
-                             collate_fn=custom_collate_fn, drop_last=False, pin_memory=True)
+    test_loader = DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=num_workers,
+                             collate_fn=custom_collate_fn, drop_last=False)
     
     print('---> No. of Images\t Train: %d\t Val: %d\t Test: %d\n' % ( len(train_dataset), len(val_dataset), len(test_dataset) ))
     
