@@ -51,15 +51,9 @@ class WebDataset(torchvision.datasets.VisionDataset):
         img = self.img_transform(img)
         
         bboxes = pkl_load('%s/bboxes/%s.pkl' % (self.root, img_id))
-        if self.max_bg_boxes > 0:
-            ## TODO: Make sure order is preserved
-            bg_boxes = bboxes[bboxes[:,-1] == 0]
-            pos_boxes = bboxes[bboxes[:,-1] != 0]
-
-            indices = np.random.permutation(len(bg_boxes))[:self.max_bg_boxes]
-            bg_boxes = bg_boxes[indices]
-
-            bboxes = np.concatenate((pos_boxes, bg_boxes), axis=0)
+        if self.max_bg_boxes > 0: # preserve order, include all non-BG bboxes
+            indices = np.unique(np.concatenate((np.where(bboxes[:,-1] != 0)[0], np.random.permutation(bboxes.shape[0])[:self.max_bg_boxes])))
+            bboxes = bboxes[indices]
         
         labels = torch.LongTensor(bboxes[:,-1])
 

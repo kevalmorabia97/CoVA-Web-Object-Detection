@@ -38,7 +38,7 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
         print_and_log('[TRAIN]\t Epoch: %2d\t Loss: %.4f\t Accuracy: %.2f%% (%.2fs)' % (epoch, epoch_loss/n_bboxes, 100*epoch_correct_preds/n_bboxes, time.time()-start), log_file)
         
         if epoch == 1 or epoch % eval_interval == 0 or epoch == n_epochs:
-            class_acc = evaluate_model(model, eval_loader, criterion, device, 'VAL', log_file)
+            class_acc = evaluate_model(model, eval_loader, criterion, device, 1, 'VAL', log_file)
             eval_acc = class_acc[1:].mean()
             model.train()
 
@@ -54,6 +54,8 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
     
     print('Model Trained! Restoring model to best Eval performance checkpoint...')
     model.load_state_dict(torch.load(ckpt_path))
+
+    return best_eval_acc
 
 
 def evaluate_model(model, eval_loader, criterion, device, k=1, split_name='VAL', log_file='log.txt'):

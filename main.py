@@ -47,7 +47,7 @@ torch.cuda.manual_seed(seed)
 N_CLASSES = 4
 CLASS_NAMES = ['BG', 'Price', 'Title', 'Image']
 IMG_HEIGHT = 1280 # Image assumed to have same height and width
-EVAL_INTERVAL = 3 # Number of Epochs after which model is evaluated
+EVAL_INTERVAL = 1 # Number of Epochs after which model is evaluated
 NUM_WORKERS = args.num_workers # multithreaded data loading
 
 DATA_DIR = '/shared/data_product_info/v2_8.3k/' # Contains .png and .pkl files for train and test data
@@ -110,12 +110,12 @@ optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT
 criterion = nn.CrossEntropyLoss(reduction='sum').to(device)
 
 ########## TRAIN MODEL ##########
-train_model(model, train_loader, optimizer, criterion, N_EPOCHS, device, val_loader, EVAL_INTERVAL, log_file, 'ckpt_%d.pth' % args.device)
+val_acc_avg = train_model(model, train_loader, optimizer, criterion, N_EPOCHS, device, val_loader, EVAL_INTERVAL, log_file, 'ckpt_%d.pth' % args.device)
 
 ########## EVALUATE TEST PERFORMANCE ##########
 print('Evaluating test data class wise accuracies...')
-evaluate_model(model, test_loader, criterion, device, 1, 'TEST', log_file)
-evaluate_model(model, test_loader, criterion, device, 2, 'TEST', log_file)
+class_acc_top1 = evaluate_model(model, test_loader, criterion, device, 1, 'TEST', log_file)
+class_acc_top2 = evaluate_model(model, test_loader, criterion, device, 2, 'TEST', log_file)
 
 with open (test_acc_domainwise_file, 'w') as f:
     f.write('Domain,N_examples,%s,%s,%s\n' % (CLASS_NAMES[1], CLASS_NAMES[2], CLASS_NAMES[3]))
@@ -138,3 +138,8 @@ for i in range(1, len(CLASS_NAMES)):
 ########## SAVE MODEL ##########
 torch.save(model.state_dict(), model_save_file)
 print_and_log('Model can be restored from \"%s\"' % (model_save_file), log_file)
+
+with open('%s/comparison.csv' % OUTPUT_DIR, 'a') as f:
+    f.write('%s,%.0e,%d,%d,%d,%d,%d,%d,%.0e,%.2f,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n' % (BACKBONE, LEARNING_RATE, BATCH_SIZE, CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM,
+    ROI_POOL_OUTPUT_SIZE[0], USE_BBOX_FEAT, WEIGHT_DECAY, DROP_PROB, MAX_BG_BOXES, val_acc_avg, 100*class_acc_top1[1], 100*class_acc_top2[1], macro_acc_test[0], 100*class_acc_top1[2],
+    100*class_acc_top2[2], macro_acc_test[1], 100*class_acc_top1[3], 100*class_acc_top2[3], macro_acc_test[2]))
