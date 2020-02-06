@@ -114,7 +114,8 @@ train_model(model, train_loader, optimizer, criterion, N_EPOCHS, device, val_loa
 
 ########## EVALUATE TEST PERFORMANCE ##########
 print('Evaluating test data class wise accuracies...')
-evaluate_model(model, test_loader, criterion, device, 'TEST', log_file)
+evaluate_model(model, test_loader, criterion, device, 1, 'TEST', log_file)
+evaluate_model(model, test_loader, criterion, device, 2, 'TEST', log_file)
 
 with open (test_acc_domainwise_file, 'w') as f:
     f.write('Domain,N_examples,%s,%s,%s\n' % (CLASS_NAMES[1], CLASS_NAMES[2], CLASS_NAMES[3]))
@@ -125,7 +126,7 @@ for domain in test_domains:
     test_dataset = WebDataset(DATA_DIR, np.loadtxt('%s/domain_wise_imgs/%s.txt' % (SPLIT_DIR, domain), np.int32).reshape(-1), CONTEXT_SIZE, max_bg_boxes=-1)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=NUM_WORKERS, collate_fn=custom_collate_fn, drop_last=False)
 
-    class_acc = evaluate_model(model, test_loader, criterion, device, 'TEST')
+    class_acc = evaluate_model(model, test_loader, criterion, device, 1, 'TEST')
 
     with open (test_acc_domainwise_file, 'a') as f:
         f.write('%s,%d,%.2f,%.2f,%.2f\n' % (domain, len(test_dataset), 100*class_acc[1], 100*class_acc[2], 100*class_acc[3]))

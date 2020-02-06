@@ -56,9 +56,10 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
     model.load_state_dict(torch.load(ckpt_path))
 
 
-def evaluate_model(model, eval_loader, criterion, device, split_name='VAL', log_file='log.txt'):
+def evaluate_model(model, eval_loader, criterion, device, k=1, split_name='VAL', log_file='log.txt'):
     """
     Evaluate model (nn.Module) on data loaded by eval_loader (torch.utils.data.DataLoader)
+    Check top `k` (default: 1) predictions for each class while evaluating class accuracies
     Returns: class_acc np.array of shape [n_classes,]
     """
     start = time.time()
@@ -80,16 +81,17 @@ def evaluate_model(model, eval_loader, criterion, device, split_name='VAL', log_
             for index in batch_indices: # for each image
                 img_indices = (bboxes[:,0] == index)
                 labels_img = labels[img_indices].view(-1,1)
+                output_img = output[img_indices]
 
                 label_indices = torch.arange(labels_img.shape[0], device=device).view(-1,1)
                 indexed_labels = torch.cat((label_indices, labels_img), dim=1)
                 indexed_labels = indexed_labels[indexed_labels[:,-1] != 0] # labels for bbox other than BG
                 
-                predictions = output[img_indices].argmax(dim=0) # `n_classes` indices indicating predicted bbox for that class
+                top_k_predictions = torch.argsort(output_img, dim=0)[output_img.shape[0]-k:] # [k, n_classes] indices indicating top k predicted bbox
                 for c in range(1, n_classes):
                     true_bbox = indexed_labels[indexed_labels[:,-1] == c][0,0]
-                    pred_bbox = predictions[c]
-                    confusion_matrix[c, c if true_bbox == pred_bbox else 0] += 1
+                    pred_bboxes = top_k_predictions[:, c]
+                    confusion_matrix[c, c if true_bbox in pred_bboxes else 0] += 1
 
         confusion_matrix[0, 0] += 1 # to avoid div by 0
         class_acc = confusion_matrix.diagonal()/confusion_matrix.sum(1)
@@ -97,7 +99,7 @@ def evaluate_model(model, eval_loader, criterion, device, split_name='VAL', log_
         
         print_and_log('[%s]\t Loss: %.4f\t Avg_class_Accuracy: %.2f%% (%.2fs)' % (split_name, epoch_loss/n_bboxes, 100*avg_acc, time.time()-start), log_file)
         for c in range(1, n_classes):
-            print_and_log('%s Acc: %.2f%%' % (model.class_names[c], 100*class_acc[c]), log_file)
+            print_and_log('%s top-%d-Acc: %.2f%%' % (model.class_names[c], k, 100*class_acc[c]), log_file)
         print_and_log('', log_file)
         
         return class_acc
