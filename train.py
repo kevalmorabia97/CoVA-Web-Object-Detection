@@ -14,7 +14,7 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
     model.train()
 
     best_eval_acc = 0.0
-    patience = 5 # number of VAL Acc values observed after best value to stop training
+    patience = 7 # number of VAL Acc values observed after best value to stop training
     min_delta = 1e-5 # min improvement in eval_acc value to be considered a valid improvement
     for epoch in range(1, n_epochs+1):
         start = time.time()
