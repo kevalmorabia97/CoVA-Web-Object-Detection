@@ -141,5 +141,5 @@ print_and_log('Model can be restored from \"%s\"' % (model_save_file), log_file)
 
 with open('%s/comparison.csv' % OUTPUT_DIR, 'a') as f:
     f.write('%s,%.0e,%d,%d,%d,%d,%d,%d,%.0e,%.2f,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n' % (BACKBONE, LEARNING_RATE, BATCH_SIZE, CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM,
-    ROI_POOL_OUTPUT_SIZE[0], USE_BBOX_FEAT, WEIGHT_DECAY, DROP_PROB, MAX_BG_BOXES, val_acc_avg, 100*class_acc_top1[1], 100*class_acc_top2[1], macro_acc_test[0], 100*class_acc_top1[2],
+    ROI_POOL_OUTPUT_SIZE[0], USE_BBOX_FEAT, WEIGHT_DECAY, DROP_PROB, MAX_BG_BOXES, 100*val_acc_avg, 100*class_acc_top1[1], 100*class_acc_top2[1], macro_acc_test[0], 100*class_acc_top1[2],
     100*class_acc_top2[2], macro_acc_test[1], 100*class_acc_top1[3], 100*class_acc_top2[3], macro_acc_test[2]))
