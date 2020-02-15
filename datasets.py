@@ -11,21 +11,25 @@ class WebDataset(torchvision.datasets.VisionDataset):
     """
     Class to load train/val/test datasets
     """
-    def __init__(self, root, img_ids, context_size, max_bg_boxes=-1):
+    def __init__(self, root, img_ids, use_context, context_size, max_bg_boxes=-1):
         """
         Args:
             root: directory where data is located
                 Must contain imgs/x.png Image and corresponding bboxes/x.pkl BBox coordinates file 
                 BBox file should have bboxes in pre-order and each row corresponds to [x,y,w,h,label]
-            img_ids: list of img_names to consider
-            context_size: number of BBoxes before and after to consider as context
-            max_bg_boxes: randomly sample this many number of background boxes (class 0) while training (default: -1 --> no sampling, take all)
+            img_ids: list of img_names (int) to consider
+            use_context: whether to make use of context or not (boolean)
+                if False, `context_indices` will be empty as it will not be used in training
+            context_size: number of BBoxes before and after to consider as context (int)
+                NOTE: this parameter is used only if use_context=True
+            max_bg_boxes: randomly sample this many (int) number of background boxes (class 0) while training (default: -1 --> no sampling, take all)
                 All samples of class > 0 are always taken
                 NOTE: For val and test data, max_bg_boxes SHOULD be -1 (no sampling)
         """
         super(WebDataset, self).__init__(root)
         
         self.ids = img_ids
+        self.use_context = use_context
         self.context_size = context_size
         self.img_transform = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
@@ -60,11 +64,14 @@ class WebDataset(torchvision.datasets.VisionDataset):
         bboxes = torch.Tensor(bboxes[:,:-1])
         bboxes[:,2:] += bboxes[:,:2] # convert from [x,y,w,h] to [x1,y1,x2,y2]
 
-        context_indices = []
-        for i in range(bboxes.shape[0]):
-            context = list(range(max(0, i-self.context_size), i)) + list(range(i+1, min(bboxes.shape[0], i+self.context_size+1)))
-            context_indices.append(context + [-1]*(2*self.context_size - len(context)))
-        context_indices = torch.LongTensor(context_indices)
+        if self.use_context:
+            context_indices = []
+            for i in range(bboxes.shape[0]):
+                context = list(range(max(0, i-self.context_size), i)) + list(range(i+1, min(bboxes.shape[0], i+self.context_size+1)))
+                context_indices.append(context + [-1]*(2*self.context_size - len(context)))
+            context_indices = torch.LongTensor(context_indices)
+        else:
+            context_indices = torch.empty((0,0), dtype=torch.long)
 
         return img, bboxes, context_indices, labels
 
@@ -115,13 +122,14 @@ def custom_collate_fn(batch):
     return images, bboxes_with_batch_index, context_indices, labels
 
 
-def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, context_size, batch_size, num_workers=4, max_bg_boxes=-1):
+def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, use_context, context_size, batch_size, num_workers=4, max_bg_boxes=-1):
     """
     Args:
         data_dir: directory which contains x.png Image and corresponding x.pkl BBox coordinates file
         train_img_ids: list of img_names to consider in train split
         val_img_ids: list of img_names to consider in val split
         test_img_ids: list of img_names to consider in test split
+        use_context: whether to make use of context or not (boolean)
         context_size: number of BBoxes before and after to consider as context
         batch_size: size of batch in train_loader
         max_bg_boxes: randomly sample this many number of background boxes (class 0) while training (default: -1 --> no sampling, take all)
@@ -134,15 +142,15 @@ def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, context_size, 
     assert np.intersect1d(val_img_ids, test_img_ids).size == 0
     assert np.intersect1d(train_img_ids, test_img_ids).size == 0
     
-    train_dataset = WebDataset(data_dir, train_img_ids, context_size, max_bg_boxes)
+    train_dataset = WebDataset(data_dir, train_img_ids, use_context, context_size, max_bg_boxes)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
                               collate_fn=custom_collate_fn, drop_last=False)
 
-    val_dataset = WebDataset(data_dir, val_img_ids, context_size, max_bg_boxes=-1)
+    val_dataset = WebDataset(data_dir, val_img_ids, use_context, context_size, max_bg_boxes=-1)
     val_loader = DataLoader(val_dataset, batch_size=10, shuffle=False, num_workers=num_workers,
                             collate_fn=custom_collate_fn, drop_last=False)
     
-    test_dataset = WebDataset(data_dir, test_img_ids, context_size, max_bg_boxes=-1)
+    test_dataset = WebDataset(data_dir, test_img_ids, use_context, context_size, max_bg_boxes=-1)
     test_loader = DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=num_workers,
                              collate_fn=custom_collate_fn, drop_last=False)
     

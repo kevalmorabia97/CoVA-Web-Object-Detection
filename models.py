@@ -7,7 +7,7 @@ from utils import count_parameters
 
 
 class WebObjExtractionNet(nn.Module):
-    def __init__(self, roi_output_size, img_H, n_classes, backbone='alexnet', use_attention=True, hidden_dim=300,
+    def __init__(self, roi_output_size, img_H, n_classes, backbone='alexnet', use_context=True, use_attention=True, hidden_dim=300,
                  trainable_convnet=True, drop_prob=0.2, use_bbox_feat=True, class_names=None):
         """
         Args:
@@ -15,7 +15,9 @@ class WebObjExtractionNet(nn.Module):
             img_H: height of image given as input to the convnet. Image assumed to be of same W and H
             n_classes: num of classes for BBoxes
             backbone: string stating which convnet feature extractor to use. Allowed values: [alexnet (default), resnet]
-            use_attention: if True, learn scores for all 2*context_size contexts and take weighted avg for context_representation 
+            use_context: if True, use context for context_representation along with own_features (default: True) 
+            use_attention: if True, learn scores for all 2*context_size contexts and take weighted avg for context_representation
+                NOTE: this parameter is not used if use_context = False
             hidden_dim: size of hidden contextual representation, used when use_attention=True (default: 300)
             trainable_convnet: if True then convnet weights will be modified while training (default: True)
             drop_prob: dropout probability (default: 0.2)
@@ -27,6 +29,7 @@ class WebObjExtractionNet(nn.Module):
 
         self.hidden_dim = hidden_dim
         self.n_classes = n_classes
+        self.use_context = use_context
         self.use_attention = use_attention
         self.trainable_convnet = trainable_convnet
         self.use_bbox_feat = use_bbox_feat
@@ -52,11 +55,11 @@ class WebObjExtractionNet(nn.Module):
         self.roi_pool = torchvision.ops.RoIPool(roi_output_size, spatial_scale)
 
         self.n_visual_feat = _convnet_output_size[1] * roi_output_size[0] * roi_output_size[1]
-        self.n_context_feat = self.hidden_dim if use_attention else self.n_visual_feat
+        self.n_context_feat = 0 if not self.use_context else self.hidden_dim if use_attention else self.n_visual_feat
         self.n_bbox_feat = 4 if self.use_bbox_feat else 0 # x,y,w,h of BBox
         self.n_total_feat = self.n_visual_feat + self.n_context_feat + self.n_bbox_feat
 
-        if self.use_attention:
+        if self.use_context and self.use_attention:
             self.encoder = nn.Sequential(
                 nn.Linear(self.n_visual_feat, self.hidden_dim),
                 nn.BatchNorm1d(self.hidden_dim),
@@ -93,37 +96,39 @@ class WebObjExtractionNet(nn.Module):
             prediction_scores: torch.Tensor of size [total_n_bboxes_in_batch, n_classes]
         """
         batch_size = bboxes.shape[0]
-        context_size = int(context_indices.shape[1]/2)
 
         ##### OWN VISUAL FEATURES #####
-        conv_feat = self.convnet(images)
-        own_features = self.roi_pool(conv_feat, bboxes).view(batch_size,-1)
+        own_features = self.roi_pool(self.convnet(images), bboxes).view(batch_size,-1)
 
         ##### CONTEXT VISUAL FEATURES USING ATTENTION #####
-        zero_feat = torch.zeros(self.n_visual_feat).view(1,-1).to(images.device) # for -1 contexts i.e. extra padded
-        pooled_feat_padded = torch.cat((own_features, zero_feat), dim=0)
-        context_features = pooled_feat_padded[context_indices.view(-1)].view(batch_size,-1) # [batch_size, 2 * context_size * n_visual_feat]
+        if self.use_context:
+            context_size = int(context_indices.shape[1]/2)
+            zero_feat = torch.zeros(self.n_visual_feat).view(1,-1).to(images.device) # for -1 contexts i.e. extra padded
+            pooled_feat_padded = torch.cat((own_features, zero_feat), dim=0)
+            context_features = pooled_feat_padded[context_indices.view(-1)].view(batch_size,-1) # [batch_size, 2 * context_size * n_visual_feat]
 
-        if self.use_attention:
-            own_features_encoded = self.encoder(own_features)
+            if self.use_attention:
+                own_features_encoded = self.encoder(own_features)
 
-            context_outputs = []
-            attention_wts = []
-            for i in range(2*context_size):
-                curr_features_encoded = self.encoder(context_features[:, i*self.n_visual_feat:(i+1)*self.n_visual_feat])
-                concatenated_feat = torch.cat((own_features_encoded, curr_features_encoded), dim=1)
-                curr_attention_wt = self.attention_layer(concatenated_feat) # [batch_size, 1]
+                context_outputs = []
+                attention_wts = []
+                for i in range(2*context_size):
+                    curr_features_encoded = self.encoder(context_features[:, i*self.n_visual_feat:(i+1)*self.n_visual_feat])
+                    concatenated_feat = torch.cat((own_features_encoded, curr_features_encoded), dim=1)
+                    curr_attention_wt = self.attention_layer(concatenated_feat) # [batch_size, 1]
+                    
+                    context_outputs.append(curr_features_encoded)
+                    attention_wts.append(curr_attention_wt)
+
+                context_outputs = torch.cat(context_outputs, dim=1).view(batch_size, 2*context_size, -1) # [batch_size, 2 * context_size, hidden_dim]
+                attention_wts = torch.softmax(torch.cat(attention_wts, dim=1), dim=1).unsqueeze(-1) # [batch_size, 2 * context_size, 1]
                 
-                context_outputs.append(curr_features_encoded)
-                attention_wts.append(curr_attention_wt)
-
-            context_outputs = torch.cat(context_outputs, dim=1).view(batch_size, 2*context_size, -1) # [batch_size, 2 * context_size, hidden_dim]
-            attention_wts = torch.softmax(torch.cat(attention_wts, dim=1), dim=1).unsqueeze(-1) # [batch_size, 2 * context_size, 1]
-            
-            context_representation = (context_outputs * attention_wts).sum(1) # [batch_size, hidden_dim]
-        else: # average of context features for context representation
-            context_representation = context_features.view(batch_size, -1, self.n_visual_feat).sum(1) # [batch_size, n_visual_feat]
-            context_representation = context_representation/(context_indices != -1).sum(1).view(batch_size,-1)
+                context_representation = (context_outputs * attention_wts).sum(1) # [batch_size, hidden_dim]
+            else: # average of context features for context representation
+                context_representation = context_features.view(batch_size, -1, self.n_visual_feat).sum(1) # [batch_size, n_visual_feat]
+                context_representation = context_representation/(context_indices != -1).sum(1).view(batch_size,-1)
+        else:
+            context_representation = own_features[:,:0] # size [n_bboxes, 0]
 
         ##### BBOX FEATURES #####
         if self.use_bbox_feat:
