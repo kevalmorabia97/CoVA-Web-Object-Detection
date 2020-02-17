@@ -5,9 +5,8 @@ import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
 
-from datasets import custom_collate_fn, load_data, WebDataset
+from datasets import load_data
 from models import WebObjExtractionNet
 from train import train_model, evaluate_model
 from utils import print_and_log
@@ -51,19 +50,21 @@ IMG_HEIGHT = 1280 # Image assumed to have same height and width
 EVAL_INTERVAL = 2 # Number of Epochs after which model is evaluated
 NUM_WORKERS = args.num_workers # multithreaded data loading
 
-DATA_DIR = '/shared/data_product_info/v3/' # Contains .png and .pkl files for train and test data
-OUTPUT_DIR = 'results_attn' # logs are saved here!
+DATA_DIR = '../data/v3/' # Contains .png and .pkl files for train and test data
+OUTPUT_DIR = 'results_data_v3/attn' # logs are saved here!
 # NOTE: if same hyperparameter configuration is run again, previous log file and saved model will be overwritten
 
 if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR)
 
 SPLIT_DIR = 'splits_v3'
-train_img_ids = np.loadtxt('%s/train_imgs.txt' % SPLIT_DIR, dtype=np.int32)
-val_img_ids = np.loadtxt('%s/val_imgs.txt' % SPLIT_DIR, dtype=np.int32)
-test_img_ids = np.loadtxt('%s/test_imgs.txt' % SPLIT_DIR, dtype=np.int32)
+train_img_ids = np.loadtxt('%s/train_imgs.txt' % SPLIT_DIR, np.int32)
+val_img_ids = np.loadtxt('%s/val_imgs.txt' % SPLIT_DIR, np.int32)
+test_img_ids = np.loadtxt('%s/test_imgs.txt' % SPLIT_DIR, np.int32)
 
-test_domains = np.loadtxt('%s/test_domains.txt' % SPLIT_DIR, dtype=str) # for calculating macro accuracy
+# for calculating macro accuracy
+webpage_info = np.loadtxt('%s/webpage_info.csv' % SPLIT_DIR, str, delimiter=',', skiprows=1) # (img_id, domain) values
+test_domains = np.loadtxt('%s/test_domains.txt' % SPLIT_DIR, str)
 
 ########## HYPERPARAMETERS ##########
 N_EPOCHS = args.n_epochs
@@ -84,6 +85,7 @@ MAX_BG_BOXES = args.max_bg_boxes if args.max_bg_boxes > 0 else -1
 params = '%s lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d wd-%.0e dp-%.2f mbb-%d' % (BACKBONE, LEARNING_RATE, BATCH_SIZE, USE_CONTEXT, CONTEXT_SIZE,
     USE_ATTENTION, HIDDEN_DIM, ROI_POOL_OUTPUT_SIZE[0], USE_BBOX_FEAT, WEIGHT_DECAY, DROP_PROB, MAX_BG_BOXES)
 log_file = '%s/%s logs.txt' % (OUTPUT_DIR, params)
+test_acc_imgwise_file = '%s/%s test_acc_imgwise.csv' % (OUTPUT_DIR, params)
 test_acc_domainwise_file = '%s/%s test_acc_domainwise.csv' % (OUTPUT_DIR, params)
 model_save_file = '%s/%s saved_model.pth' % (OUTPUT_DIR, params)
 
@@ -118,23 +120,18 @@ val_acc_avg = train_model(model, train_loader, optimizer, criterion, N_EPOCHS, d
 
 ########## EVALUATE TEST PERFORMANCE ##########
 print('Evaluating test data class wise accuracies...')
-class_acc_top1 = evaluate_model(model, test_loader, criterion, device, 1, 'TEST', log_file)
-class_acc_top2 = evaluate_model(model, test_loader, criterion, device, 2, 'TEST', log_file)
+img_acc_top1, class_acc_top1 = evaluate_model(model, test_loader, device, 1, 'TEST', log_file)
+_, class_acc_top2 = evaluate_model(model, test_loader, device, 2, 'TEST', log_file)
 
-with open (test_acc_domainwise_file, 'w') as f:
-    f.write('Domain,N_examples,%s,%s,%s\n' % (CLASS_NAMES[1], CLASS_NAMES[2], CLASS_NAMES[3]))
+np.savetxt(test_acc_imgwise_file, img_acc_top1, '%d,%.2f,%.2f,%.2f', ',', header='img_id,price_acc,title_acc,image_acc', comments='')
 
 print('Evaluating per domain accuracy for %d test domains...' % len(test_domains))
-for domain in test_domains:
-    print('\n---> Domain:', domain)
-    test_dataset = WebDataset(DATA_DIR, np.loadtxt('%s/domain_wise_imgs/%s.txt' % (SPLIT_DIR, domain), np.int32).reshape(-1), USE_CONTEXT,
-                              CONTEXT_SIZE, max_bg_boxes=-1)
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=NUM_WORKERS, collate_fn=custom_collate_fn, drop_last=False)
-
-    class_acc = evaluate_model(model, test_loader, criterion, device, 1, 'TEST')
-
-    with open (test_acc_domainwise_file, 'a') as f:
-        f.write('%s,%d,%.2f,%.2f,%.2f\n' % (domain, len(test_dataset), 100*class_acc[1], 100*class_acc[2], 100*class_acc[3]))
+with open (test_acc_domainwise_file, 'w') as f:
+    f.write('Domain,N_examples,%s,%s,%s\n' % (CLASS_NAMES[1], CLASS_NAMES[2], CLASS_NAMES[3]))
+    for domain in test_domains:
+        domain_imgs = webpage_info[np.isin(webpage_info[:,1], domain), 0].astype(np.int32)
+        class_acc = img_acc_top1[np.isin(img_acc_top1[:,0], domain_imgs), 1:].mean(0)*100
+        f.write('%s,%d,%.2f,%.2f,%.2f\n' % (domain, len(domain_imgs), class_acc[0], class_acc[1], class_acc[2]))
 
 macro_acc_test = np.loadtxt(test_acc_domainwise_file, delimiter=',', skiprows=1, dtype=str)[:,2:].astype(np.float32).mean(0)
 for i in range(1, len(CLASS_NAMES)):
@@ -146,6 +143,7 @@ print_and_log('Model can be restored from \"%s\"' % (model_save_file), log_file)
 
 with open('%s/comparison.csv' % OUTPUT_DIR, 'a') as f:
     f.write('%s,%.0e,%d,%d,%d,%d,%d,%d,%d,%.0e,%.2f,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n' % (BACKBONE, LEARNING_RATE, BATCH_SIZE, USE_CONTEXT,
-        CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM, ROI_POOL_OUTPUT_SIZE[0], USE_BBOX_FEAT, WEIGHT_DECAY, DROP_PROB, MAX_BG_BOXES, 100*val_acc_avg,
-        100*class_acc_top1[1], 100*class_acc_top2[1], macro_acc_test[0], 100*class_acc_top1[2], 100*class_acc_top2[2], macro_acc_test[1],
-        100*class_acc_top1[3], 100*class_acc_top2[3], macro_acc_test[2]))
+        CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM, ROI_POOL_OUTPUT_SIZE[0], USE_BBOX_FEAT, WEIGHT_DECAY, DROP_PROB, MAX_BG_BOXES, val_acc_avg,
+        class_acc_top1[0], class_acc_top2[0], macro_acc_test[0], class_acc_top1[1], class_acc_top2[1], macro_acc_test[1],
+        class_acc_top1[2], class_acc_top2[2], macro_acc_test[2]))
+

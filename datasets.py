@@ -17,7 +17,7 @@ class WebDataset(torchvision.datasets.VisionDataset):
             root: directory where data is located
                 Must contain imgs/x.png Image and corresponding bboxes/x.pkl BBox coordinates file 
                 BBox file should have bboxes in pre-order and each row corresponds to [x,y,w,h,label]
-            img_ids: list of img_names (int) to consider
+            img_ids: list of img_names to consider
             use_context: whether to make use of context or not (boolean)
                 if False, `context_indices` will be empty as it will not be used in training
             context_size: number of BBoxes before and after to consider as context (int)
@@ -43,13 +43,15 @@ class WebDataset(torchvision.datasets.VisionDataset):
             index (int): Index in range [0, self.__len__ - 1]
 
         Returns:
+            img_id: torch.LongTensor name of image
             image: torch.Tensor of size [3,H,W].
             bboxes: torch.Tensor of size [n_bbox, 4] i.e. n bboxes each of [top_left_x, top_left_y, bottom_right_x, bottom_right_y]
-            context_indices: torch.Tensor of size [n_bbox, 2*context_size] i.e. bbox indices (0-indexed) of contexts for all n bboxes.
+            context_indices: torch.LongTensor of size [n_bbox, 2*context_size] i.e. bbox indices (0-indexed) of contexts for all n bboxes.
                 If not enough found, rest are -1
-            labels: torch.Tensor of size [n_bbox] i.e. each value is label of the corresponding bbox
+            labels: torch.LongTensor of size [n_bbox] i.e. each value is label of the corresponding bbox
         """
         img_id = self.ids[index]
+        img_id_tensor = torch.LongTensor([img_id]) # NOTE: if img_id is a string then this will have to be modified
         
         img = Image.open('%s/imgs/%s.png' % (self.root, img_id)).convert('RGB')
         img = self.img_transform(img)
@@ -73,7 +75,7 @@ class WebDataset(torchvision.datasets.VisionDataset):
         else:
             context_indices = torch.empty((0,0), dtype=torch.long)
 
-        return img, bboxes, context_indices, labels
+        return img_id_tensor, img, bboxes, context_indices, labels
 
     def __len__(self):
         return len(self.ids)
@@ -87,24 +89,26 @@ def custom_collate_fn(batch):
     custom collate_fn has to be created that creates a batch
     
     Args:
-        batch: list of N=`batch_size` tuples. Example [(img_1, bboxes_1, ci_1, labels_1), ..., (img_N, bboxes_N, ci_N, labels_N)]
+        batch: list of N=`batch_size` tuples. Example [(img_id_1, img_1, bboxes_1, ci_1, labels_1), ..., (img_id_N, img_N, bboxes_N, ci_N, labels_N)]
     
     Returns:
-        batch: contains images, bboxes, labels
+        batch: contains img_ids, images, bboxes, context_indices, labels
+            img_ids: torch.LongTensor names of images (to compute Macro Accuracies)
             images: torch.Tensor [N, 3, img_H, img_W]
             bboxes: torch.Tensor [total_n_bboxes_in_batch, 5]
                 each each of [batch_img_index, top_left_x, top_left_y, bottom_right_x, bottom_right_y]
-            context_indices: [total_n_bboxes_in_batch, 2*context_size] i.e. bbox indices (0-indexed) of contexts for all n bboxes.
+            context_indices: torch.LongTensor [total_n_bboxes_in_batch, 2*context_size] i.e. bbox indices (0-indexed) of contexts for all n bboxes.
                 If not enough found, rest are -1
-            
-            labels: torch.Tensor [total_n_bboxes_in_batch]
+            labels: torch.LongTensor [total_n_bboxes_in_batch]
     """
-    images, bboxes, context_indices, labels = zip(*batch)
+    img_ids, images, bboxes, context_indices, labels = zip(*batch)
+    # img_ids = (img_id_1, ..., img_id_N)
     # images = (img_1, ..., img_N) each element of size [3, img_H, img_W]
     # bboxes = (bboxes_1, ..., bboxes_N) each element of size [n_bboxes_in_image, 4]
     # context_indices = (ci_1, ..., ci_N) each element of size [n_bboxes_in_image, 2*context_size]
     # labels = (labels_1, ..., labels_N) each element of size [n_bboxes_in_image]
     
+    img_ids = torch.cat(img_ids)
     images = torch.stack(images, 0)
     
     bboxes_with_batch_index = []
@@ -119,7 +123,7 @@ def custom_collate_fn(batch):
     
     labels = torch.cat(labels)
     
-    return images, bboxes_with_batch_index, context_indices, labels
+    return img_ids, images, bboxes_with_batch_index, context_indices, labels
 
 
 def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, use_context, context_size, batch_size, num_workers=4, max_bg_boxes=-1):

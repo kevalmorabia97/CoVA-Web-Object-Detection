@@ -1,8 +1,8 @@
 import numpy as np
-import time
+from time import time
 import torch
 
-from utils import print_and_log, print_confusion_matrix
+from utils import print_and_log
 
 
 def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eval_loader, eval_interval=3, log_file='log.txt', ckpt_path='ckpt.pth'):
@@ -15,11 +15,11 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
 
     best_eval_acc = 0.0
     patience = 7 # number of VAL Acc values observed after best value to stop training
-    min_delta = 1e-5 # min improvement in eval_acc value to be considered a valid improvement
+    min_delta = 1e-2 # min improvement in eval_acc value (in percentage) to be considered a valid improvement
     for epoch in range(1, n_epochs+1):
-        start = time.time()
+        start = time()
         epoch_loss, epoch_correct_preds, n_bboxes = 0.0, 0.0, 0.0
-        for i, (images, bboxes, context_indices, labels) in enumerate(train_loader):
+        for i, (_, images, bboxes, context_indices, labels) in enumerate(train_loader):
             labels = labels.to(device) # [total_n_bboxes_in_batch]
             n_bboxes += labels.shape[0]
             
@@ -35,11 +35,11 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
             loss.backward()
             optimizer.step()
 
-        print_and_log('[TRAIN]\t Epoch: %2d\t Loss: %.4f\t Accuracy: %.2f%% (%.2fs)' % (epoch, epoch_loss/n_bboxes, 100*epoch_correct_preds/n_bboxes, time.time()-start), log_file)
+        print_and_log('Epoch: %2d  Loss: %.4f  Accuracy: %.2f%%  (%.2fs)' % (epoch, epoch_loss/n_bboxes, 100*epoch_correct_preds/n_bboxes, time()-start), log_file)
         
         if epoch == 1 or epoch % eval_interval == 0 or epoch == n_epochs:
-            class_acc = evaluate_model(model, eval_loader, criterion, device, 1, 'VAL', log_file)
-            eval_acc = class_acc[1:].mean()
+            _, class_acc = evaluate_model(model, eval_loader, device, 1, 'VAL', log_file)
+            eval_acc = class_acc.mean()
             model.train()
 
             if eval_acc - best_eval_acc > min_delta: # best so far so save checkpoint to restore later
@@ -58,29 +58,27 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
     return best_eval_acc
 
 
-def evaluate_model(model, eval_loader, criterion, device, k=1, split_name='VAL', log_file='log.txt'):
+def evaluate_model(model, eval_loader, device, k=1, split_name='VAL', log_file='log.txt'):
     """
     Evaluate model (nn.Module) on data loaded by eval_loader (torch.utils.data.DataLoader)
     Check top `k` (default: 1) predictions for each class while evaluating class accuracies
-    Returns: class_acc np.array of shape [n_classes,]
+    Returns:
+        `img_acc`: np.array (np.int32) of shape [n_imgs, 4], each row contains [img_id, price_acc (1/0), title_acc (1/0), image_acc (1/0)]
+        `class_acc`: of classes other than BG, np.array of shape [n_classes-1,] where values are in percentages
     """
-    start = time.time()
+    start = time()
     
     model.eval()
-    epoch_loss, n_bboxes = 0.0, 0.0
     n_classes = model.n_classes
-    confusion_matrix = np.zeros([n_classes, n_classes], dtype=np.int32) # to get per class metrics
+    img_acc = [] # list of [img_id, price_acc (1/0), title_acc (1/0), image_acc (1/0)]
     with torch.no_grad():
-        for i, (images, bboxes, context_indices, labels) in enumerate(eval_loader):
+        for i, (img_ids, images, bboxes, context_indices, labels) in enumerate(eval_loader):
             labels = labels.to(device) # [total_n_bboxes_in_batch]
-            n_bboxes += labels.shape[0]
-
             output = model(images.to(device), bboxes.to(device), context_indices.to(device)) # [total_n_bboxes_in_batch, n_classes]
-            loss = criterion(output, labels)
-            epoch_loss += loss.item()
             
-            batch_indices = torch.unique(bboxes[:,0])
+            batch_indices = torch.unique(bboxes[:,0]).long()
             for index in batch_indices: # for each image
+                img_id = img_ids[index].item()
                 img_indices = (bboxes[:,0] == index)
                 labels_img = labels[img_indices].view(-1,1)
                 output_img = output[img_indices]
@@ -90,18 +88,19 @@ def evaluate_model(model, eval_loader, criterion, device, k=1, split_name='VAL',
                 indexed_labels = indexed_labels[indexed_labels[:,-1] != 0] # labels for bbox other than BG
                 
                 top_k_predictions = torch.argsort(output_img, dim=0)[output_img.shape[0]-k:] # [k, n_classes] indices indicating top k predicted bbox
+                curr_img_acc = [img_id] # [img_id, price_acc (1/0), title_acc (1/0), image_acc (1/0)]
                 for c in range(1, n_classes):
                     true_bbox = indexed_labels[indexed_labels[:,-1] == c][0,0]
                     pred_bboxes = top_k_predictions[:, c]
-                    confusion_matrix[c, c if true_bbox in pred_bboxes else 0] += 1
-
-        confusion_matrix[0, 0] += 1 # to avoid div by 0
-        class_acc = confusion_matrix.diagonal()/confusion_matrix.sum(1)
-        avg_acc = class_acc[1:].mean() # accuracy of classes other than BG
+                    curr_img_acc.append(1 if true_bbox in pred_bboxes else 0)
+                img_acc.append(curr_img_acc)
         
-        print_and_log('[%s]\t Loss: %.4f\t Avg_class_Accuracy: %.2f%% (%.2fs)' % (split_name, epoch_loss/n_bboxes, 100*avg_acc, time.time()-start), log_file)
-        for c in range(1, n_classes):
-            print_and_log('%s top-%d-Acc: %.2f%%' % (model.class_names[c], k, 100*class_acc[c]), log_file)
-        print_and_log('', log_file)
+    img_acc = np.array(img_acc, dtype=np.int32) # [n_imgs, 4] numpy array
+    class_acc = img_acc[:,1:].mean(0)*100 # accuracies of classes other than BG
+    
+    print_and_log('[%s] Avg_class_Accuracy: %.2f%% (%.2fs)' % (split_name, class_acc.mean(), time()-start), log_file)
+    for c in range(1, n_classes):
+        print_and_log('%s top-%d-Acc: %.2f%%' % (model.class_names[c], k, class_acc[c-1]), log_file)
+    print_and_log('', log_file)
         
-        return class_acc
+    return img_acc, class_acc

@@ -47,7 +47,7 @@ for index, img_id in enumerate(test_img_ids):
     print(img_id)
     
     batch = [dataset.__getitem__(index)]
-    images, bboxes, context_indices, labels = custom_collate_fn(batch)
+    _, images, bboxes, context_indices, labels = custom_collate_fn(batch)
 
     images = images.to(device) # [batch_size, 3, img_H, img_W]
     bboxes = bboxes.to(device) # [total_n_bboxes_in_batch, 5]
