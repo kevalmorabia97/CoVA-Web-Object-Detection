@@ -1,0 +1,6 @@
+Statistics of number of bboxes in a web page:
+	Min: 11
+	Max: 230
+	Median: 84
+	Mean: 93.04
+	Std: 37.26
