@@ -49,25 +49,6 @@ def print_and_log(msg, log_file, write_mode='a'):
         f.write(msg + '\n')
 
 
-def print_confusion_matrix(c, class_names=None):
-    """
-    c: np.array of shape [n_classes, n_classes] where
-        each row represents True labels
-        each col represents Pred labels
-    
-    class_names: list of n_classes items each containing name of classes in order
-                    if None (default), class names will be set to 0, 1, ..., n_classes-1
-    """
-    c = c.astype(str)
-    n_classes = c.shape[0]
-    if class_names is None:
-        class_names = np.arange(n_classes).astype(str)
-    
-    print( 'True \\ Pred\t%s' % ('\t'.join(class_names)) )
-    for i in range(n_classes):
-        print( '%s\t\t%s' % (class_names[i], '\t'.join(c[i])) )
-
-
 def visualize_bbox(img_path, attn_wt_file, img_save_dir):
     """
     Plot img and show all context bboxes on the img with attention scores
