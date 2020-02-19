@@ -5,7 +5,7 @@ import torch
 from utils import print_and_log
 
 
-def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eval_loader, eval_interval=3, log_file='log.txt', ckpt_path='ckpt.pth'):
+def train_model(model, train_loader, optimizer, scheduler, criterion, n_epochs, device, eval_loader, eval_interval=3, log_file='log.txt', ckpt_path='ckpt.pth'):
     """
     Train the `model` (nn.Module) on data loaded by `train_loader` (torch.utils.data.DataLoader) for `n_epochs`.
     evaluate performance on `eval_loader` dataset every `eval_interval` epochs and check for early stopping criteria!
@@ -18,7 +18,7 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
     min_delta = 1e-2 # min improvement in eval_acc value (in percentage) to be considered a valid improvement
     for epoch in range(1, n_epochs+1):
         start = time()
-        epoch_loss, epoch_correct_preds, n_bboxes = 0.0, 0.0, 0.0
+        epoch_loss, epoch_correct, n_bboxes = 0.0, 0.0, 0.0
         for i, (_, images, bboxes, context_indices, labels) in enumerate(train_loader):
             labels = labels.to(device) # [total_n_bboxes_in_batch]
             n_bboxes += labels.shape[0]
@@ -27,7 +27,7 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
 
             output = model(images.to(device), bboxes.to(device), context_indices.to(device)) # [total_n_bboxes_in_batch, n_classes]
             predictions = output.argmax(dim=1)
-            epoch_correct_preds += (predictions == labels).sum().item()
+            epoch_correct += (predictions == labels).sum().item()
             
             loss = criterion(output, labels)
             epoch_loss += loss.item()
@@ -35,8 +35,7 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
             loss.backward()
             optimizer.step()
 
-        print_and_log('Epoch: %2d  Loss: %.4f  Accuracy: %.2f%%  (%.2fs)' % (epoch, epoch_loss/n_bboxes, 100*epoch_correct_preds/n_bboxes, time()-start), log_file)
-        
+        print_and_log('Epoch: %2d  Loss: %.4f  Accuracy: %.2f%%  (%.2fs)' % (epoch, epoch_loss/n_bboxes, 100*epoch_correct/n_bboxes, time()-start), log_file)
         if epoch == 1 or epoch % eval_interval == 0 or epoch == n_epochs:
             _, class_acc = evaluate_model(model, eval_loader, device, 1, 'VAL', log_file)
             eval_acc = class_acc.mean()
@@ -51,6 +50,8 @@ def train_model(model, train_loader, optimizer, criterion, n_epochs, device, eva
                 if patience_count >= patience:
                     print('Early Stopping!')
                     break
+        
+        scheduler.step()
     
     print('Model Trained! Restoring model to best Eval performance checkpoint...')
     model.load_state_dict(torch.load(ckpt_path))
