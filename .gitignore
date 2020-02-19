@@ -105,3 +105,7 @@ venv.bak/
 
 **/*.pth
 results*
+*.sh
+*.csv
+*.zip
+create_tests.py
