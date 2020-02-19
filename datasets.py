@@ -158,6 +158,6 @@ def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, use_context, c
     test_loader = DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=num_workers,
                              collate_fn=custom_collate_fn, drop_last=False)
     
-    print('---> No. of Images\t Train: %d\t Val: %d\t Test: %d\n' % ( len(train_dataset), len(val_dataset), len(test_dataset) ))
+    print('No. of Images\t Train: %d\t Val: %d\t Test: %d\n' % ( len(train_dataset), len(val_dataset), len(test_dataset) ))
     
     return train_loader, val_loader, test_loader

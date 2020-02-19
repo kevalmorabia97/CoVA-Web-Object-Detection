@@ -86,7 +86,7 @@ if not os.path.exists(results_dir):
 criterion = nn.CrossEntropyLoss(reduction='sum').to(device)
 
 for fold in CV_FOLDS:
-    print('\n>>> Training on %s...' % fold)
+    print('\n%s Training on %s %s' % ('*'*20, fold, '*'*20))
     ########## DATA LOADERS ##########
     train_img_ids = np.loadtxt('%s/%s/train_imgs.txt' % (SPLIT_DIR, fold), np.int32)
     val_img_ids = np.loadtxt('%s/%s/val_imgs.txt' % (SPLIT_DIR, fold), np.int32)
@@ -120,7 +120,9 @@ for fold in CV_FOLDS:
     model = WebObjExtractionNet(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, TRAINABLE_CONVNET,
                                 DROP_PROB, USE_BBOX_FEAT, CLASS_NAMES).to(device)
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-    val_acc = train_model(model, train_loader, optimizer, criterion, N_EPOCHS, device, val_loader, EVAL_INTERVAL, log_file, 'ckpt_%d.pth' % args.device)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.95)
+
+    val_acc = train_model(model, train_loader, optimizer, scheduler, criterion, N_EPOCHS, device, val_loader, EVAL_INTERVAL, log_file, 'ckpt_%d.pth' % args.device)
     torch.save(model.state_dict(), model_save_file)
 
     print('Evaluating on test data...')
@@ -133,8 +135,8 @@ for fold in CV_FOLDS:
         f.write('Domain,N_examples,%s,%s,%s\n' % (CLASS_NAMES[1], CLASS_NAMES[2], CLASS_NAMES[3]))
         for domain in test_domains:
             domain_imgs = webpage_info[np.isin(webpage_info[:,1], domain), 0].astype(np.int32)
-            class_acc = img_acc[np.isin(img_acc[:,0], domain_imgs), 1:].mean(0)*100
-            f.write('%s,%d,%.2f,%.2f,%.2f\n' % (domain, len(domain_imgs), class_acc[0], class_acc[1], class_acc[2]))
+            domain_class_acc = img_acc[np.isin(img_acc[:,0], domain_imgs), 1:].mean(0)*100
+            f.write('%s,%d,%.2f,%.2f,%.2f\n' % (domain, len(domain_imgs), domain_class_acc[0], domain_class_acc[1], domain_class_acc[2]))
     macro_acc_test = np.loadtxt(test_acc_domainwise_file, delimiter=',', skiprows=1, dtype=str)[:,2:].astype(np.float32).mean(0)
     for c in range(1, N_CLASSES):
         print_and_log('%s Macro Acc: %.2f%%' % (CLASS_NAMES[c], macro_acc_test[c-1]), log_file)
