@@ -24,7 +24,6 @@ class WebObjExtractionNet(nn.Module):
             use_bbox_feat: if True, then concatenate x,y,w,h with convnet visual features for classification of a BBox (default: True)
             class_names: list of n_classes string elements containing names of the classes (default: [0, 1, ..., n_classes-1])
         """
-        print('Initializing WebObjExtractionNet...')
         super(WebObjExtractionNet, self).__init__()
 
         self.hidden_dim = hidden_dim
@@ -37,7 +36,7 @@ class WebObjExtractionNet(nn.Module):
 
         if backbone == 'resnet':
             self.convnet = torchvision.models.resnet18(pretrained=True)
-            modules = list(self.convnet.children())[:-5] # remove last few layers!
+            modules = list(self.convnet.children())[:-4] # remove last few layers!
         elif backbone == 'alexnet':
             self.convnet = torchvision.models.alexnet(pretrained=True)
             modules = list(self.convnet.features.children())[:7] # remove last few layers!
@@ -81,7 +80,7 @@ class WebObjExtractionNet(nn.Module):
             nn.Linear(self.n_total_feat, self.n_classes),
         )
 
-        print(self)
+        # print(self)
     
     def forward(self, images, bboxes, context_indices):
         """
