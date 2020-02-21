@@ -36,7 +36,7 @@ class WebObjExtractionNet(nn.Module):
 
         if backbone == 'resnet':
             self.convnet = torchvision.models.resnet18(pretrained=True)
-            modules = list(self.convnet.children())[:-4] # remove last few layers!
+            modules = list(self.convnet.children())[:-5] # remove last few layers!
         elif backbone == 'alexnet':
             self.convnet = torchvision.models.alexnet(pretrained=True)
             modules = list(self.convnet.features.children())[:7] # remove last few layers!

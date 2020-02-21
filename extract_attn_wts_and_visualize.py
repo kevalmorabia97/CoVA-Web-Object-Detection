@@ -16,38 +16,48 @@ N_CLASSES = 4
 CLASS_NAMES = ['BG', 'Price', 'Title', 'Image']
 IMG_HEIGHT = 1280 # Image assumed to have same height and width
 
-DATA_DIR = '/shared/data_product_info/v2_8.3k/' # Contains .png and .pkl files for train and test data
-OUTPUT_DIR = 'results_attn/attn_weights/'
+DATA_DIR = '../data/v3/' # Contains imgs/*.png and bboxes/*.pkl files
+OUTPUT_DIR = 'results_5-Fold_CV/'
 
-if not os.path.exists(OUTPUT_DIR):
-    os.makedirs(OUTPUT_DIR)
-
+CV_FOLD = 1
 SPLIT_DIR = 'splits/'
-test_img_ids = np.loadtxt('%s/test_imgs.txt' % SPLIT_DIR, dtype=np.int32)
+FOLD_DIR = '%s/Fold-%d' % (SPLIT_DIR, CV_FOLD)
+test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, np.int32)
 
-BACKBONE = 'alexnet'
+BACKBONE = 'resnet'
 TRAINABLE_CONVNET = True
+LEARNING_RATE = 5e-4
+BATCH_SIZE = 5
+USE_CONTEXT = True
 CONTEXT_SIZE = 6
 USE_ATTENTION = True
 HIDDEN_DIM = 300
-ROI_POOL_OUTPUT_SIZE = (1, 1)
+ROI_OUTPUT = (3, 3)
 USE_BBOX_FEAT = True
+WEIGHT_DECAY = 1e-3
 DROP_PROB = 0.2
+MAX_BG_BOXES = 100
 
-model_save_file = 'results_attn/alexnet lr-5e-04 batch-25 cs-6 att-1 hd-300 roi-1 bbf-1 wd-0e+00 dp-0.20 mbb--1 saved_model.pth'
+params = '%s lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d wd-%.0e dp-%.2f mbb-%d' % (BACKBONE, LEARNING_RATE, BATCH_SIZE,
+    USE_CONTEXT, CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM, ROI_OUTPUT[0], USE_BBOX_FEAT, WEIGHT_DECAY, DROP_PROB, MAX_BG_BOXES)
+results_dir = '%s/%s' % (OUTPUT_DIR, params)
+model_save_file = '%s/Fold-%s saved_model.pth' % (results_dir, CV_FOLD)
+
+attention_vis_output_dir = '%s/Fold-%d attention visualization/' % (results_dir, CV_FOLD)
+if not os.path.exists(attention_vis_output_dir):
+    os.makedirs(attention_vis_output_dir)
 
 ########## DATA LOADERS ##########
-dataset = WebDataset(DATA_DIR, test_img_ids, CONTEXT_SIZE, max_bg_boxes=-1)
-model = WebObjExtractionNet(ROI_POOL_OUTPUT_SIZE, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_ATTENTION, HIDDEN_DIM, TRAINABLE_CONVNET, DROP_PROB,
-                            USE_BBOX_FEAT, CLASS_NAMES).to(device)
+dataset = WebDataset(DATA_DIR, test_img_ids, USE_CONTEXT, CONTEXT_SIZE, max_bg_boxes=-1)
+model = WebObjExtractionNet(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, TRAINABLE_CONVNET,
+                            DROP_PROB, USE_BBOX_FEAT, CLASS_NAMES).to(device)
 model.load_state_dict(torch.load(model_save_file, map_location=device))
 model.eval()
 
 for index, img_id in enumerate(test_img_ids):
     print(img_id)
     
-    batch = [dataset.__getitem__(index)]
-    _, images, bboxes, context_indices, labels = custom_collate_fn(batch)
+    _, images, bboxes, context_indices, labels = custom_collate_fn([dataset.__getitem__(index)])
 
     images = images.to(device) # [batch_size, 3, img_H, img_W]
     bboxes = bboxes.to(device) # [total_n_bboxes_in_batch, 5]
@@ -87,9 +97,9 @@ for index, img_id in enumerate(test_img_ids):
     labels = labels[labels > 0]
 
     dump_obj = torch.cat((bbox_features, labels.float().view(-1,1), context_bbox_features, attention_wts), dim=1).detach().cpu().numpy()
-    np.savetxt('%s/%d.csv' % (OUTPUT_DIR, img_id), dump_obj, delimiter=',', fmt='%.3f')
+    np.savetxt('%s/%d.csv' % (attention_vis_output_dir, img_id), dump_obj, delimiter=',', fmt='%.3f')
 
-    visualize_bbox('%s/imgs/%d.png' % (DATA_DIR, img_id), '%s/%d.csv' % (OUTPUT_DIR, img_id), OUTPUT_DIR)
+    visualize_bbox('%s/imgs/%d.png' % (DATA_DIR, img_id), '%s/%d.csv' % (attention_vis_output_dir, img_id), attention_vis_output_dir)
 
-print('Extracted attention weights for for all images saved in %s' % (OUTPUT_DIR))
+print('Extracted attention visualizations and weights for for all images saved in %s' % (attention_vis_output_dir))
 print('Each image has a corresponding csv file that stores 4 cols as bbox coordinates, 1 col is label, 2*context_size*4 cols as context bbox coordinates, 2*context_size attention values that sum to 1')
