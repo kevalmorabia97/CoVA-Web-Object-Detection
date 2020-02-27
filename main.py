@@ -28,7 +28,7 @@ parser.add_argument('-r', '--roi', type=int, default=3)
 parser.add_argument('-bbf', '--bbox_feat', type=int, default=1, choices=[0,1])
 parser.add_argument('-wd', '--weight_decay', type=float, default=1e-3)
 parser.add_argument('-dp', '--drop_prob', type=float, default=0.2)
-parser.add_argument('-mbb', '--max_bg_boxes', type=int, default=100)
+parser.add_argument('-sf', '--sampling_fraction', type=float, default=0.8)
 parser.add_argument('-nw', '--num_workers', type=int, default=8)
 parser.add_argument('-cvf', '--cv_fold', type=int, required=True, choices=[1,2,3,4,5])
 args = parser.parse_args()
@@ -75,10 +75,10 @@ ROI_OUTPUT = (args.roi, args.roi)
 USE_BBOX_FEAT = bool(args.bbox_feat)
 WEIGHT_DECAY = args.weight_decay
 DROP_PROB = args.drop_prob
-MAX_BG_BOXES = args.max_bg_boxes if args.max_bg_boxes > 0 else -1
+SAMPLING_FRACTION = args.sampling_fraction if (args.sampling_fraction >= 0 and args.sampling_fraction <= 1) else 1
 
-params = '%s lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d wd-%.0e dp-%.2f mbb-%d' % (BACKBONE, LEARNING_RATE, BATCH_SIZE,
-    USE_CONTEXT, CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM, ROI_OUTPUT[0], USE_BBOX_FEAT, WEIGHT_DECAY, DROP_PROB, MAX_BG_BOXES)
+params = '%s lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d wd-%.0e dp-%.1f sf-%.1f' % (BACKBONE, LEARNING_RATE, BATCH_SIZE,
+    USE_CONTEXT, CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM, ROI_OUTPUT[0], USE_BBOX_FEAT, WEIGHT_DECAY, DROP_PROB, SAMPLING_FRACTION)
 results_dir = '%s/%s' % (OUTPUT_DIR, params)
 fold_wise_acc_file = '%s/fold_wise_acc.csv' % results_dir
 
@@ -93,7 +93,7 @@ test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, np.int32)
 test_domains = np.loadtxt('%s/test_domains.txt' % FOLD_DIR, str)
 
 train_loader, val_loader, test_loader = load_data(DATA_DIR, train_img_ids, val_img_ids, test_img_ids, USE_CONTEXT, CONTEXT_SIZE,
-                                                    BATCH_SIZE, NUM_WORKERS, MAX_BG_BOXES)
+                                                  BATCH_SIZE, NUM_WORKERS, SAMPLING_FRACTION)
 
 log_file = '%s/Fold-%s logs.txt' % (results_dir, CV_FOLD)
 test_acc_imgwise_file = '%s/Fold-%s test_acc_imgwise.csv' % (results_dir, CV_FOLD)
@@ -113,7 +113,7 @@ print_and_log('RoI Pool Output Size: (%d, %d)' % ROI_OUTPUT, log_file)
 print_and_log('BBox Features: %s' % (USE_BBOX_FEAT), log_file)
 print_and_log('Weight Decay: %.0e' % (WEIGHT_DECAY), log_file)
 print_and_log('Dropout Probability: %.2f' % (DROP_PROB), log_file)
-print_and_log('Max BG Boxes: %d\n' % (MAX_BG_BOXES), log_file)
+print_and_log('Sampling Fraction: %.2f\n' % (SAMPLING_FRACTION), log_file)
 
 ########## TRAIN MODEL ##########
 model = WebObjExtractionNet(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, TRAINABLE_CONVNET,

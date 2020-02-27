@@ -11,7 +11,7 @@ class WebDataset(torchvision.datasets.VisionDataset):
     """
     Class to load train/val/test datasets
     """
-    def __init__(self, root, img_ids, use_context, context_size, max_bg_boxes=-1):
+    def __init__(self, root, img_ids, use_context, context_size, sampling_fraction=1):
         """
         Args:
             root: directory where data is located
@@ -22,9 +22,9 @@ class WebDataset(torchvision.datasets.VisionDataset):
                 if False, `context_indices` will be empty as it will not be used in training
             context_size: number of BBoxes before and after to consider as context (int)
                 NOTE: this parameter is used only if use_context=True
-            max_bg_boxes: randomly sample this many (int) number of background boxes (class 0) while training (default: -1 --> no sampling, take all)
+            sampling_fraction: randomly sample this many (float between 0 and 1) fraction of background boxes (class 0) while training (default: 1 --> no sampling, take all)
                 All samples of class > 0 are always taken
-                NOTE: For val and test data, max_bg_boxes SHOULD be -1 (no sampling)
+                NOTE: For val and test data, sampling_fraction SHOULD be 1 (no sampling)
         """
         super(WebDataset, self).__init__(root)
         
@@ -35,7 +35,7 @@ class WebDataset(torchvision.datasets.VisionDataset):
             torchvision.transforms.ToTensor(),
             # torchvision.transforms.Normalize([0.8992, 0.8977, 0.8966], [0.2207, 0.2166, 0.2217]) # calculated on trainval data
         ])
-        self.max_bg_boxes = max_bg_boxes
+        self.sampling_fraction = sampling_fraction
     
     def __getitem__(self, index):
         """
@@ -57,8 +57,10 @@ class WebDataset(torchvision.datasets.VisionDataset):
         img = self.img_transform(img)
         
         bboxes = pkl_load('%s/bboxes/%s.pkl' % (self.root, img_id))
-        if self.max_bg_boxes > 0: # preserve order, include all non-BG bboxes
-            indices = np.unique(np.concatenate((np.where(bboxes[:,-1] != 0)[0], np.random.permutation(bboxes.shape[0])[:self.max_bg_boxes])))
+        if self.sampling_fraction < 1: # preserve order, include all non-BG bboxes
+            sampled_bbox_idxs = np.random.permutation(bboxes.shape[0])[:int(self.sampling_fraction*bboxes.shape[0])]
+            indices = np.concatenate((np.where(bboxes[:,-1] != 0)[0], sampled_bbox_idxs))
+            indices = np.unique(indices) # sort and remove duplicate non-BG boxes
             bboxes = bboxes[indices]
         
         labels = torch.LongTensor(bboxes[:,-1])
@@ -126,7 +128,7 @@ def custom_collate_fn(batch):
     return img_ids, images, bboxes_with_batch_index, context_indices, labels
 
 
-def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, use_context, context_size, batch_size, num_workers=4, max_bg_boxes=-1):
+def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, use_context, context_size, batch_size, num_workers=4, sampling_fraction=1):
     """
     Args:
         data_dir: directory which contains x.png Image and corresponding x.pkl BBox coordinates file
@@ -136,7 +138,7 @@ def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, use_context, c
         use_context: whether to make use of context or not (boolean)
         context_size: number of BBoxes before and after to consider as context
         batch_size: size of batch in train_loader
-        max_bg_boxes: randomly sample this many number of background boxes (class 0) while training (default: -1 --> no sampling, take all)
+        sampling_fraction: randomly sample this many fraction of background boxes (class 0) while training (default: 1 --> no sampling, take all)
             All samples of class > 0 are always taken
     
     Returns:
@@ -146,15 +148,15 @@ def load_data(data_dir, train_img_ids, val_img_ids, test_img_ids, use_context, c
     assert np.intersect1d(val_img_ids, test_img_ids).size == 0
     assert np.intersect1d(train_img_ids, test_img_ids).size == 0
     
-    train_dataset = WebDataset(data_dir, train_img_ids, use_context, context_size, max_bg_boxes)
+    train_dataset = WebDataset(data_dir, train_img_ids, use_context, context_size, sampling_fraction)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers,
                               collate_fn=custom_collate_fn, drop_last=False)
 
-    val_dataset = WebDataset(data_dir, val_img_ids, use_context, context_size, max_bg_boxes=-1)
+    val_dataset = WebDataset(data_dir, val_img_ids, use_context, context_size, sampling_fraction=1)
     val_loader = DataLoader(val_dataset, batch_size=10, shuffle=False, num_workers=num_workers,
                             collate_fn=custom_collate_fn, drop_last=False)
     
-    test_dataset = WebDataset(data_dir, test_img_ids, use_context, context_size, max_bg_boxes=-1)
+    test_dataset = WebDataset(data_dir, test_img_ids, use_context, context_size, sampling_fraction=1)
     test_loader = DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=num_workers,
                              collate_fn=custom_collate_fn, drop_last=False)
     
