@@ -21,15 +21,17 @@ parser.add_argument('-tc', '--trainable_convnet', type=int, default=1, choices=[
 parser.add_argument('-lr', '--learning_rate', type=float, default=0.0005)
 parser.add_argument('-bs', '--batch_size', type=int, default=5)
 parser.add_argument('-c', '--context', type=int, default=1, choices=[0,1])
-parser.add_argument('-cs', '--context_size', type=int, default=6)
+parser.add_argument('-cs', '--context_size', type=int, default=8)
 parser.add_argument('-att', '--attention', type=int, default=1, choices=[0,1])
-parser.add_argument('-hd', '--hidden_dim', type=int, default=300)
+parser.add_argument('-atth', '--attention_heads', type=int, default=1)
+parser.add_argument('-hd', '--hidden_dim', type=int, default=384)
 parser.add_argument('-r', '--roi', type=int, default=3)
 parser.add_argument('-bbf', '--bbox_feat', type=int, default=1, choices=[0,1])
+parser.add_argument('-bbhd', '--bbox_hidden_dim', type=int, default=32)
 parser.add_argument('-wd', '--weight_decay', type=float, default=1e-3)
 parser.add_argument('-dp', '--drop_prob', type=float, default=0.2)
 parser.add_argument('-sf', '--sampling_fraction', type=float, default=0.8)
-parser.add_argument('-nw', '--num_workers', type=int, default=8)
+parser.add_argument('-nw', '--num_workers', type=int, default=5)
 parser.add_argument('-cvf', '--cv_fold', type=int, required=True, choices=[1,2,3,4,5])
 args = parser.parse_args()
 
@@ -70,15 +72,18 @@ BATCH_SIZE = args.batch_size
 USE_CONTEXT = bool(args.context)
 CONTEXT_SIZE = args.context_size if USE_CONTEXT else 0
 USE_ATTENTION = bool(args.attention) if USE_CONTEXT else False
+ATTENTION_HEADS = args.attention_heads if USE_CONTEXT and USE_ATTENTION else 0
 HIDDEN_DIM = args.hidden_dim if USE_CONTEXT and USE_ATTENTION else 0
 ROI_OUTPUT = (args.roi, args.roi)
 USE_BBOX_FEAT = bool(args.bbox_feat)
+BBOX_HIDDEN_DIM = args.bbox_hidden_dim if USE_BBOX_FEAT else 0
 WEIGHT_DECAY = args.weight_decay
 DROP_PROB = args.drop_prob
 SAMPLING_FRACTION = args.sampling_fraction if (args.sampling_fraction >= 0 and args.sampling_fraction <= 1) else 1
 
-params = '%s lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d wd-%.0e dp-%.1f sf-%.1f' % (BACKBONE, LEARNING_RATE, BATCH_SIZE,
-    USE_CONTEXT, CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM, ROI_OUTPUT[0], USE_BBOX_FEAT, WEIGHT_DECAY, DROP_PROB, SAMPLING_FRACTION)
+params = '%s lr-%.0e batch-%d c-%d cs-%d att-%d atth-%d hd-%d roi-%d bbf-%d bbhd-%d wd-%.0e dp-%.1f sf-%.1f' % (BACKBONE, LEARNING_RATE, BATCH_SIZE,
+    USE_CONTEXT, CONTEXT_SIZE, USE_ATTENTION, ATTENTION_HEADS, HIDDEN_DIM, ROI_OUTPUT[0], USE_BBOX_FEAT, BBOX_HIDDEN_DIM, WEIGHT_DECAY, DROP_PROB,
+    SAMPLING_FRACTION)
 results_dir = '%s/%s' % (OUTPUT_DIR, params)
 fold_wise_acc_file = '%s/fold_wise_acc.csv' % results_dir
 
@@ -108,16 +113,18 @@ print_and_log('Batch Size: %d' % (BATCH_SIZE), log_file)
 print_and_log('Use Context: %s' % (USE_CONTEXT), log_file)
 print_and_log('Context Size: %d' % (CONTEXT_SIZE), log_file)
 print_and_log('Use Attention: %s' % (USE_ATTENTION), log_file)
+print_and_log('Attention Heads: %d' % (ATTENTION_HEADS), log_file)
 print_and_log('Hidden Dim: %d' % (HIDDEN_DIM), log_file)
 print_and_log('RoI Pool Output Size: (%d, %d)' % ROI_OUTPUT, log_file)
-print_and_log('BBox Features: %s' % (USE_BBOX_FEAT), log_file)
+print_and_log('Use BBox Features: %s' % (USE_BBOX_FEAT), log_file)
+print_and_log('BBox Hidden Dim: %d' % (BBOX_HIDDEN_DIM), log_file)
 print_and_log('Weight Decay: %.0e' % (WEIGHT_DECAY), log_file)
 print_and_log('Dropout Probability: %.2f' % (DROP_PROB), log_file)
 print_and_log('Sampling Fraction: %.2f\n' % (SAMPLING_FRACTION), log_file)
 
 ########## TRAIN MODEL ##########
-model = WebObjExtractionNet(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, TRAINABLE_CONVNET,
-                            DROP_PROB, USE_BBOX_FEAT, CLASS_NAMES).to(device)
+model = WebObjExtractionNet(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, ATTENTION_HEADS, HIDDEN_DIM, USE_BBOX_FEAT,
+                            BBOX_HIDDEN_DIM, TRAINABLE_CONVNET, DROP_PROB, CLASS_NAMES).to(device)
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=1) # No LR Scheduling
 criterion = nn.CrossEntropyLoss(reduction='sum').to(device)
