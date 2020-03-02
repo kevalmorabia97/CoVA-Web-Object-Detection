@@ -28,18 +28,21 @@ BACKBONE = 'resnet'
 TRAINABLE_CONVNET = True
 LEARNING_RATE = 5e-4
 BATCH_SIZE = 5
-USE_CONTEXT = True
-CONTEXT_SIZE = 6
-USE_ATTENTION = True
-HIDDEN_DIM = 300
+USE_CONTEXT = True # this should be True
+CONTEXT_SIZE = 8
+USE_ATTENTION = True # this should be True
+ATTENTION_HEADS = 1 # if more than 1 attention head, then use score from 1st (index 0) head for visualization
+HIDDEN_DIM = 384
 ROI_OUTPUT = (3, 3)
 USE_BBOX_FEAT = True
+BBOX_HIDDEN_DIM = 32
 WEIGHT_DECAY = 1e-3
 DROP_PROB = 0.2
-MAX_BG_BOXES = 100
+SAMPLING_FRACTION = 0.8
 
-params = '%s lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d wd-%.0e dp-%.2f mbb-%d' % (BACKBONE, LEARNING_RATE, BATCH_SIZE,
-    USE_CONTEXT, CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM, ROI_OUTPUT[0], USE_BBOX_FEAT, WEIGHT_DECAY, DROP_PROB, MAX_BG_BOXES)
+params = '%s lr-%.0e batch-%d c-%d cs-%d att-%d atth-%d hd-%d roi-%d bbf-%d bbhd-%d wd-%.0e dp-%.1f sf-%.1f' % (BACKBONE, LEARNING_RATE, BATCH_SIZE,
+    USE_CONTEXT, CONTEXT_SIZE, USE_ATTENTION, ATTENTION_HEADS, HIDDEN_DIM, ROI_OUTPUT[0], USE_BBOX_FEAT, BBOX_HIDDEN_DIM, WEIGHT_DECAY, DROP_PROB,
+    SAMPLING_FRACTION)
 results_dir = '%s/%s' % (OUTPUT_DIR, params)
 model_save_file = '%s/Fold-%s saved_model.pth' % (results_dir, CV_FOLD)
 
@@ -48,9 +51,9 @@ if not os.path.exists(attention_vis_output_dir):
     os.makedirs(attention_vis_output_dir)
 
 ########## DATA LOADERS ##########
-dataset = WebDataset(DATA_DIR, test_img_ids, USE_CONTEXT, CONTEXT_SIZE, max_bg_boxes=-1)
-model = WebObjExtractionNet(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, TRAINABLE_CONVNET,
-                            DROP_PROB, USE_BBOX_FEAT, CLASS_NAMES).to(device)
+dataset = WebDataset(DATA_DIR, test_img_ids, USE_CONTEXT, CONTEXT_SIZE, sampling_fraction=1)
+model = WebObjExtractionNet(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, ATTENTION_HEADS, HIDDEN_DIM, USE_BBOX_FEAT,
+                            BBOX_HIDDEN_DIM, TRAINABLE_CONVNET, DROP_PROB, CLASS_NAMES).to(device)
 model.load_state_dict(torch.load(model_save_file, map_location=device))
 model.eval()
 
@@ -66,37 +69,48 @@ for index, img_id in enumerate(test_img_ids):
     
     batch_size = bboxes.shape[0]
     with torch.no_grad():
-        ##### OWN VISUAL FEATURES #####
-        conv_feat = model.convnet(images)
-        own_features = model.roi_pool(conv_feat, bboxes).view(batch_size,-1)
+        ##### BBOX FEATURES #####
+        bbox_coords = bboxes[:, 1:].clone() # discard batch_img_index column
+        bbox_coords[:, 2:] -= bbox_coords[:, :2] # convert to [top_left_x, top_left_y, width, height]
 
-        ##### CONTEXT VISUAL FEATURES USING ATTENTION #####
-        zero_feat = torch.zeros(model.n_visual_feat).view(1,-1).to(device) # for -1 contexts i.e. extra padded
-        pooled_feat_padded = torch.cat((own_features, zero_feat), dim=0)
-        context_features = pooled_feat_padded[context_indices.view(-1)].view(batch_size,-1) # [batch_size, 2 * context_size * n_visual_feat]
+        zero_bbox_coords = torch.zeros(4).view(1,-1).to(device)
+        bbox_coords_padded = torch.cat((bbox_coords, zero_bbox_coords), dim=0)
+        context_bbox_coords = bbox_coords_padded[context_indices.view(-1)].view(batch_size,-1) # [batch_size, 2 * context_size * 4]
 
-        own_features_encoded = model.encoder(own_features)
+        if USE_BBOX_FEAT:
+            bbox_asp_ratio = (bbox_coords[:, 2]/bbox_coords[:, 3]).view(batch_size, 1)
+            bbox_features = torch.cat((bbox_coords, bbox_asp_ratio), dim=1)
+            
+            bbox_features = model.bbox_feat_encoder(bbox_features)
+        else:
+            bbox_features = bboxes[:, :0] # size [n_bboxes, 0]
+        
+        ##### OWN VISUAL + BBOX FEATURES #####
+        own_features = model.roi_pool(model.convnet(images), bboxes).view(batch_size, model.n_visual_feat)
+        own_features = torch.cat((own_features, bbox_features), dim=1)
+
+        ##### CONTEXT VISUAL + BBOX FEATURES USING SELF-ATTENTION #####
+        n_context = context_indices.shape[1]
+        zero_feat = torch.zeros((1, model.n_own_feat)).to(images.device) # for -1 contexts i.e. extra padded
+        own_feat_padded = torch.cat((own_features, zero_feat), dim=0)
+        value = own_feat_padded[context_indices.view(-1)].view(batch_size, n_context, model.n_context_feat) # context_features
+
+        head = 0
         attention_wts = []
-        for i in range(2*CONTEXT_SIZE):
-            curr_features_encoded = model.encoder(context_features[:, i*model.n_visual_feat:(i+1)*model.n_visual_feat])
-            concatenated_feat = torch.cat((own_features_encoded, curr_features_encoded), dim=1)
-            curr_attention_wt = model.attention_layer(concatenated_feat) # [batch_size, 1]
+        query = model.q_encoders[head](own_features) # [batch_size, hidden_dim]
+        for c in range(n_context):
+            key = model.k_encoders[head](value[:, c, :]) # [batch_size, hidden_dim]
+            curr_attention_wt = model.attention_layers[head](torch.cat((query, key), dim=1)) # [batch_size, 1]
             attention_wts.append(curr_attention_wt)
-        attention_wts = torch.softmax(torch.cat(attention_wts, dim=1), dim=1) # [batch_size, 2 * context_size, 1]
-    
-    bbox_features = bboxes[:, 1:].clone() # remove batch_index column
-    bbox_features[:, 2:] -= bbox_features[:, :2] # convert to [top_left_x, top_left_y, width, height]
-    
-    zero_bbox_feat = torch.zeros(4).view(1,-1).to(device)
-    bbox_features_padded = torch.cat((bbox_features, zero_bbox_feat), dim=0)
-    context_bbox_features = bbox_features_padded[context_indices.view(-1)].view(batch_size,-1) # [batch_size, 2 * context_size * 4]
 
-    bbox_features = bbox_features[labels > 0]
-    context_bbox_features = context_bbox_features[labels > 0]
+        attention_wts = torch.softmax(torch.cat(attention_wts, dim=1), dim=1) # [batch_size, n_context]
+
+    bbox_coords = bbox_coords[labels > 0] # [x, y, w, h]
+    context_bbox_coords = context_bbox_coords[labels > 0]
     attention_wts = attention_wts[labels > 0]
     labels = labels[labels > 0]
 
-    dump_obj = torch.cat((bbox_features, labels.float().view(-1,1), context_bbox_features, attention_wts), dim=1).detach().cpu().numpy()
+    dump_obj = torch.cat((bbox_coords, labels.float().view(-1,1), context_bbox_coords, attention_wts), dim=1).detach().cpu().numpy()
     np.savetxt('%s/%d.csv' % (attention_vis_output_dir, img_id), dump_obj, delimiter=',', fmt='%.3f')
 
     visualize_bbox('%s/imgs/%d.png' % (DATA_DIR, img_id), '%s/%d.csv' % (attention_vis_output_dir, img_id), attention_vis_output_dir)
