@@ -33,7 +33,6 @@ class WebDataset(torchvision.datasets.VisionDataset):
         self.context_size = context_size
         self.img_transform = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
-            # torchvision.transforms.Normalize([0.8992, 0.8977, 0.8966], [0.2207, 0.2166, 0.2217]) # calculated on trainval data
         ])
         self.sampling_fraction = sampling_fraction
     

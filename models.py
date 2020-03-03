@@ -7,18 +7,18 @@ from utils import count_parameters
 
 
 class WebObjExtractionNet(nn.Module):
-    def __init__(self, roi_output_size, img_H, n_classes, backbone='alexnet', use_context=True, use_attention=True, n_attn_heads=8,
+    def __init__(self, roi_output_size, img_H, n_classes, backbone='resnet', use_context=True, use_attention=True, n_attn_heads=1,
                  hidden_dim=384, use_bbox_feat=True, bbox_hidden_dim=32, trainable_convnet=True, drop_prob=0.2, class_names=None):
         """
         Args:
             roi_output_size: Tuple (int, int) which will be output of the roi_pool layer for each channel of convnet_feature
             img_H: height of image given as input to the convnet. Image assumed to be of same W and H
             n_classes: num of classes for BBoxes
-            backbone: string stating which convnet feature extractor to use. Allowed values: [alexnet (default), resnet]
+            backbone: string stating which convnet feature extractor to use. Allowed values: [alexnet, resnet (default)]
             use_context: if True, use context for context_representation along with own_features (default: True) 
             use_attention: if True, learn scores for all n_context contexts and take weighted avg for context_representation
                 NOTE: this parameter is not used if use_context = False
-            n_attn_heads: number of heads for self-attention, used when use_attention=True (default: 8)
+            n_attn_heads: number of heads for self-attention, used when use_attention=True (default: 1)
             hidden_dim: size of hidden contextual representation, used when use_attention=True (default: 384)
             use_bbox_feat: if True, then use [x, y, w, h, asp_ratio] with convnet visual features for classification of a BBox (default: True)
             bbox_hidden_dim: size of hidden representation of 5 bbox features, used when use_bbox_feat=True (default: 32)
@@ -67,7 +67,6 @@ class WebObjExtractionNet(nn.Module):
                 nn.Linear(5, self.n_bbox_feat),
                 nn.BatchNorm1d(self.n_bbox_feat),
                 nn.ReLU(),
-                # nn.Linear(self.n_bbox_feat, self.n_bbox_feat),
             )
 
         if self.use_context and self.use_attention:

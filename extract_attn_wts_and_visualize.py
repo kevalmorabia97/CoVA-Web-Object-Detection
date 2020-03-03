@@ -16,7 +16,7 @@ N_CLASSES = 4
 CLASS_NAMES = ['BG', 'Price', 'Title', 'Image']
 IMG_HEIGHT = 1280 # Image assumed to have same height and width
 
-DATA_DIR = '../data/v3/' # Contains imgs/*.png and bboxes/*.pkl files
+DATA_DIR = '../data/' # Contains imgs/*.png and bboxes/*.pkl files
 OUTPUT_DIR = 'results_5-Fold_CV/'
 
 CV_FOLD = 1
@@ -29,7 +29,7 @@ TRAINABLE_CONVNET = True
 LEARNING_RATE = 5e-4
 BATCH_SIZE = 5
 USE_CONTEXT = True # this should be True
-CONTEXT_SIZE = 8
+CONTEXT_SIZE = 12
 USE_ATTENTION = True # this should be True
 ATTENTION_HEADS = 1 # if more than 1 attention head, then use score from 1st (index 0) head for visualization
 HIDDEN_DIM = 384

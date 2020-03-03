@@ -2,5 +2,11 @@ Statistics of number of bboxes in a web page:
 	Min: 11
 	Max: 230
 	Median: 84
-	Mean: 93.04
-	Std: 37.26
+	Mean: 93.0
+	Std: 37.3
+
+All bboxes for any web page are arranged in their order in the preoder traversal of the HTML DOM tree corresponding to that web page
+Average distance between:
+	Price & Title: 13	[Number of bboxes between labeled Price & Title in a web page]
+	Title & Image: 8	[Number of bboxes between labeled Title & Image in a web page]
+	Image & Price: 13	[Number of bboxes between labeled Image & Price in a web page]

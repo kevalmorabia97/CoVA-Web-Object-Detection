@@ -21,7 +21,7 @@ parser.add_argument('-tc', '--trainable_convnet', type=int, default=1, choices=[
 parser.add_argument('-lr', '--learning_rate', type=float, default=0.0005)
 parser.add_argument('-bs', '--batch_size', type=int, default=5)
 parser.add_argument('-c', '--context', type=int, default=1, choices=[0,1])
-parser.add_argument('-cs', '--context_size', type=int, default=8)
+parser.add_argument('-cs', '--context_size', type=int, default=12)
 parser.add_argument('-att', '--attention', type=int, default=1, choices=[0,1])
 parser.add_argument('-atth', '--attention_heads', type=int, default=1)
 parser.add_argument('-hd', '--hidden_dim', type=int, default=384)
@@ -53,7 +53,7 @@ IMG_HEIGHT = 1280 # Image assumed to have same height and width
 EVAL_INTERVAL = 2 # Number of Epochs after which model is evaluated
 NUM_WORKERS = args.num_workers # multithreaded data loading
 
-DATA_DIR = '../data/v3/' # Contains imgs/*.png and bboxes/*.pkl files
+DATA_DIR = '../data/' # Contains imgs/*.png and bboxes/*.pkl files
 CV_FOLD = args.cv_fold
 SPLIT_DIR = 'splits'
 FOLD_DIR = '%s/Fold-%d' % (SPLIT_DIR, CV_FOLD)
