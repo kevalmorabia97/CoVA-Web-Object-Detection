@@ -35,6 +35,9 @@ class WebDataset(torchvision.datasets.VisionDataset):
             torchvision.transforms.ToTensor(),
         ])
         self.sampling_fraction = sampling_fraction
+
+        self.imgs_paths = ['%s/imgs/%s.png' % (self.root, img_id) for img_id in self.ids]
+        self.bbox_paths = ['%s/bboxes/%s.pkl' % (self.root, img_id) for img_id in self.ids]
     
     def __getitem__(self, index):
         """
@@ -49,13 +52,12 @@ class WebDataset(torchvision.datasets.VisionDataset):
                 If not enough found, rest are -1
             labels: torch.LongTensor of size [n_bbox] i.e. each value is label of the corresponding bbox
         """
-        img_id = self.ids[index]
-        img_id_tensor = torch.LongTensor([img_id]) # NOTE: if img_id is a string then this will have to be modified
+        img_id_tensor = torch.LongTensor([self.ids[index]]) # NOTE: if img_id is a string then this will have to be modified
         
-        img = Image.open('%s/imgs/%s.png' % (self.root, img_id)).convert('RGB')
+        img = Image.open(self.imgs_paths[index]).convert('RGB')
         img = self.img_transform(img)
         
-        bboxes = pkl_load('%s/bboxes/%s.pkl' % (self.root, img_id))
+        bboxes = pkl_load(self.bbox_paths[index])
         if self.sampling_fraction < 1: # preserve order, include all non-BG bboxes
             sampled_bbox_idxs = np.random.permutation(bboxes.shape[0])[:int(self.sampling_fraction*bboxes.shape[0])]
             indices = np.concatenate((np.where(bboxes[:,-1] != 0)[0], sampled_bbox_idxs))

@@ -1,7 +1,6 @@
 import argparse
 import numpy as np
 import os
-import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -9,7 +8,7 @@ import torch.optim as optim
 from datasets import load_data
 from models import WebObjExtractionNet
 from train import train_model, evaluate_model
-from utils import print_and_log
+from utils import print_and_log, set_all_seeds
 
 
 ########## CMDLINE ARGS ##########
@@ -17,16 +16,16 @@ parser = argparse.ArgumentParser('Train Model')
 parser.add_argument('-d', '--device', type=int, default=0)
 parser.add_argument('-e', '--n_epochs', type=int, default=100)
 parser.add_argument('-bb', '--backbone', type=str, default='resnet', choices=['alexnet', 'resnet'])
-parser.add_argument('-tc', '--trainable_convnet', type=int, default=1, choices=[0,1])
+parser.add_argument('--freeze_convnet', dest='freeze_convnet', action='store_true')
 parser.add_argument('-lr', '--learning_rate', type=float, default=0.0005)
 parser.add_argument('-bs', '--batch_size', type=int, default=5)
-parser.add_argument('-c', '--context', type=int, default=1, choices=[0,1])
+parser.add_argument('--no_context', dest='use_context', action='store_false')
 parser.add_argument('-cs', '--context_size', type=int, default=12)
-parser.add_argument('-att', '--attention', type=int, default=1, choices=[0,1])
+parser.add_argument('--no_attention', dest='attention', action='store_false')
 parser.add_argument('-atth', '--attention_heads', type=int, default=1)
 parser.add_argument('-hd', '--hidden_dim', type=int, default=384)
 parser.add_argument('-r', '--roi', type=int, default=3)
-parser.add_argument('-bbf', '--bbox_feat', type=int, default=1, choices=[0,1])
+parser.add_argument('--no_bbox_feat', dest='bbox_feat', action='store_false')
 parser.add_argument('-bbhd', '--bbox_hidden_dim', type=int, default=32)
 parser.add_argument('-wd', '--weight_decay', type=float, default=1e-3)
 parser.add_argument('-dp', '--drop_prob', type=float, default=0.2)
@@ -36,15 +35,7 @@ parser.add_argument('-cvf', '--cv_fold', type=int, required=True, choices=[1,2,3
 args = parser.parse_args()
 
 device = torch.device('cuda:%d' % args.device if torch.cuda.is_available() else 'cpu')
-
-########## MAKING RESULTS REPRODUCIBLE ##########
-seed = 1
-random.seed(seed)
-np.random.seed(seed)
-torch.manual_seed(seed)
-torch.cuda.manual_seed(seed)
-# torch.backends.cudnn.deterministic = True
-# torch.backends.cudnn.benchmark = False
+set_all_seeds(123)
 
 ########## PARAMETERS ##########
 N_CLASSES = 4
@@ -66,16 +57,16 @@ webpage_info = np.loadtxt('%s/webpage_info.csv' % SPLIT_DIR, str, delimiter=',',
 ########## HYPERPARAMETERS ##########
 N_EPOCHS = args.n_epochs
 BACKBONE = args.backbone
-TRAINABLE_CONVNET = bool(args.trainable_convnet)
+TRAINABLE_CONVNET = not args.freeze_convnet
 LEARNING_RATE = args.learning_rate
 BATCH_SIZE = args.batch_size
-USE_CONTEXT = bool(args.context)
+USE_CONTEXT = args.use_context
 CONTEXT_SIZE = args.context_size if USE_CONTEXT else 0
-USE_ATTENTION = bool(args.attention) if USE_CONTEXT else False
+USE_ATTENTION = args.attention if USE_CONTEXT else False
 ATTENTION_HEADS = args.attention_heads if USE_CONTEXT and USE_ATTENTION else 0
 HIDDEN_DIM = args.hidden_dim if USE_CONTEXT and USE_ATTENTION else 0
 ROI_OUTPUT = (args.roi, args.roi)
-USE_BBOX_FEAT = bool(args.bbox_feat)
+USE_BBOX_FEAT = args.bbox_feat
 BBOX_HIDDEN_DIM = args.bbox_hidden_dim if USE_BBOX_FEAT else 0
 WEIGHT_DECAY = args.weight_decay
 DROP_PROB = args.drop_prob
@@ -126,11 +117,10 @@ print_and_log('Sampling Fraction: %.2f\n' % (SAMPLING_FRACTION), log_file)
 model = WebObjExtractionNet(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, ATTENTION_HEADS, HIDDEN_DIM, USE_BBOX_FEAT,
                             BBOX_HIDDEN_DIM, TRAINABLE_CONVNET, DROP_PROB, CLASS_NAMES).to(device)
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=1) # No LR Scheduling
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=1) # No LR Scheduling
 criterion = nn.CrossEntropyLoss(reduction='sum').to(device)
 
-val_acc = train_model(model, train_loader, optimizer, scheduler, criterion, N_EPOCHS, device, val_loader, EVAL_INTERVAL, log_file, 'ckpt_%d.pth' % args.device)
-torch.save(model.state_dict(), model_save_file)
+val_acc = train_model(model, train_loader, optimizer, scheduler, criterion, N_EPOCHS, device, val_loader, EVAL_INTERVAL, log_file, model_save_file)
 
 print('Evaluating on test data...')
 img_acc, class_acc = evaluate_model(model, test_loader, device, 1, 'TEST', log_file)

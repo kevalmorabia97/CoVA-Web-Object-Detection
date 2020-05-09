@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 from PIL import Image
+import random
+import torch
 
 
 def compute_image_data_statistics(data_loader):
@@ -49,6 +51,15 @@ def print_and_log(msg, log_file, write_mode='a'):
         f.write(msg + '\n')
 
 
+def set_all_seeds(seed=123):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    # torch.backends.cudnn.deterministic = True
+    # torch.backends.cudnn.benchmark = False
+
+
 def visualize_bbox(img_path, attn_wt_file, img_save_dir):
     """
     Plot img and show all context bboxes on the img with attention scores
@@ -65,22 +76,20 @@ def visualize_bbox(img_path, attn_wt_file, img_save_dir):
     plt_data = np.loadtxt(attn_wt_file, delimiter=',')
     context_size = int((plt_data.shape[1] - 5) / 10)
 
+    plt_data[:,-2*context_size:] /= plt_data[:,-2*context_size:].max()
+
     plt.rcParams.update({'font.size': 6})
     for row in plt_data:
         plt.imshow(img)
         plt.title('Attention Visualization for class: ' + class_names[int(row[4])])
         ax = plt.gca()
-        ax.add_patch(plt.Rectangle((row[0], row[1]), row[2], row[3], fill=False, edgecolor='black', linewidth=2))
+        ax.add_patch(plt.Rectangle((row[0], row[1]), row[2], row[3], fill=False, edgecolor='black', linewidth=1.5))
         for c in range(1, 2*context_size+1):
             if row[4*c+1] == 0 and row[4*c+2] == 0 and row[4*c+3] == 0 and row[4*c+4] == 0:
                 continue
-            if row[4*(2*context_size+1) + c] >= 0.2:
-                ax.text(row[4*c+1], row[4*c+2], '%.1f' % (100*row[4*(2*context_size+1) + c]))
-                color = 'green'
-            else:
-                color = 'red'
-            ax.add_patch(plt.Rectangle((row[4*c+1], row[4*c+2]), row[4*c+3], row[4*c+4], fill=False, edgecolor=color, linewidth=1))
+            ax.add_patch(plt.Rectangle((row[4*c+1], row[4*c+2]), row[4*c+3], row[4*c+4], fill=True, facecolor='red', alpha=0.75*row[4*(2*context_size+1) + c]))
+            ax.add_patch(plt.Rectangle((row[4*c+1], row[4*c+2]), row[4*c+3], row[4*c+4], fill=False, edgecolor='red', linewidth=0.75))
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig('%s/%s_attn_%s.png' % (img_save_dir, img_path.rsplit('/',1)[-1][:-4], class_names[int(row[4])]), dpi=300, bbox_inches = 'tight', pad_inches = 0)
+        plt.savefig('%s/%s_attn_%s.png' % (img_save_dir, img_path.rsplit('/',1)[-1][:-4], class_names[int(row[4])]), dpi=300, bbox_inches='tight', pad_inches=0)
         plt.close()

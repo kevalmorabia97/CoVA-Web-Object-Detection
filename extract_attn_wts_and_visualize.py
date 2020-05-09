@@ -1,6 +1,5 @@
 import numpy as np
 import os
-import random
 import torch
 
 from datasets import WebDataset, custom_collate_fn
@@ -8,10 +7,9 @@ from models import WebObjExtractionNet
 from utils import visualize_bbox
 
 
-DEVICE_NO = 0
-device = torch.device('cuda:%d' % DEVICE_NO if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-########## PARAMETERS ##########
+########## PARAMETERS for restoring saved_model ##########
 N_CLASSES = 4
 CLASS_NAMES = ['BG', 'Price', 'Title', 'Image']
 IMG_HEIGHT = 1280 # Image assumed to have same height and width
