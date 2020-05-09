@@ -3,7 +3,6 @@ import numpy as np
 import os
 import torch
 import torch.nn as nn
-import torch.optim as optim
 
 from datasets import load_data
 from models import WebObjExtractionNet
@@ -81,21 +80,12 @@ fold_wise_acc_file = '%s/fold_wise_acc.csv' % results_dir
 if not os.path.exists(results_dir):
     os.makedirs(results_dir)
 
-print('\n%s Training on Fold-%s %s' % ('*'*20, CV_FOLD, '*'*20))
-########## DATA LOADERS ##########
-train_img_ids = np.loadtxt('%s/train_imgs.txt' % FOLD_DIR, np.int32)
-val_img_ids = np.loadtxt('%s/val_imgs.txt' % FOLD_DIR, np.int32)
-test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, np.int32)
-test_domains = np.loadtxt('%s/test_domains.txt' % FOLD_DIR, str)
-
-train_loader, val_loader, test_loader = load_data(DATA_DIR, train_img_ids, val_img_ids, test_img_ids, USE_CONTEXT, CONTEXT_SIZE,
-                                                  BATCH_SIZE, NUM_WORKERS, SAMPLING_FRACTION)
-
 log_file = '%s/Fold-%s logs.txt' % (results_dir, CV_FOLD)
 test_acc_imgwise_file = '%s/Fold-%s test_acc_imgwise.csv' % (results_dir, CV_FOLD)
 test_acc_domainwise_file = '%s/Fold-%s test_acc_domainwise.csv' % (results_dir, CV_FOLD)
 model_save_file = '%s/Fold-%s saved_model.pth' % (results_dir, CV_FOLD)
 
+print('\n%s Training on Fold-%s %s' % ('*'*20, CV_FOLD, '*'*20))
 print('logs will be saved in \"%s\"' % (log_file))
 print_and_log('Backbone Convnet: %s' % (BACKBONE), log_file, 'w')
 print_and_log('Trainable Convnet: %s' % (TRAINABLE_CONVNET), log_file)
@@ -113,10 +103,19 @@ print_and_log('Weight Decay: %.0e' % (WEIGHT_DECAY), log_file)
 print_and_log('Dropout Probability: %.2f' % (DROP_PROB), log_file)
 print_and_log('Sampling Fraction: %.2f\n' % (SAMPLING_FRACTION), log_file)
 
+########## DATA LOADERS ##########
+train_img_ids = np.loadtxt('%s/train_imgs.txt' % FOLD_DIR, np.int32)
+val_img_ids = np.loadtxt('%s/val_imgs.txt' % FOLD_DIR, np.int32)
+test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, np.int32)
+test_domains = np.loadtxt('%s/test_domains.txt' % FOLD_DIR, str)
+
+train_loader, val_loader, test_loader = load_data(DATA_DIR, train_img_ids, val_img_ids, test_img_ids, USE_CONTEXT, CONTEXT_SIZE,
+                                                  BATCH_SIZE, NUM_WORKERS, SAMPLING_FRACTION)
+
 ########## TRAIN MODEL ##########
 model = WebObjExtractionNet(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, ATTENTION_HEADS, HIDDEN_DIM, USE_BBOX_FEAT,
                             BBOX_HIDDEN_DIM, TRAINABLE_CONVNET, DROP_PROB, CLASS_NAMES).to(device)
-optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=1) # No LR Scheduling
 criterion = nn.CrossEntropyLoss(reduction='sum').to(device)
 
