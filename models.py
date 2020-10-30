@@ -7,8 +7,8 @@ from utils import count_parameters
 
 
 class WebObjExtractionNet(nn.Module):
-    def __init__(self, roi_output_size, img_H, n_classes, backbone='resnet', use_context=True, use_attention=True, n_attn_heads=1,
-                 hidden_dim=384, use_bbox_feat=True, bbox_hidden_dim=32, trainable_convnet=True, drop_prob=0.2, class_names=None):
+    def __init__(self, roi_output_size, img_H, n_classes, backbone='resnet', use_context=True, use_attention=True, hidden_dim=384, 
+                 use_bbox_feat=True, bbox_hidden_dim=32, n_additional_features=0, trainable_convnet=True, drop_prob=0.2, class_names=None):
         """
         Args:
             roi_output_size: Tuple (int, int) which will be output of the roi_pool layer for each channel of convnet_feature
@@ -18,10 +18,10 @@ class WebObjExtractionNet(nn.Module):
             use_context: if True, use context for context_representation along with own_features (default: True) 
             use_attention: if True, learn scores for all n_context contexts and take weighted avg for context_representation
                 NOTE: this parameter is not used if use_context = False
-            n_attn_heads: number of heads for self-attention, used when use_attention=True (default: 1)
             hidden_dim: size of hidden contextual representation, used when use_attention=True (default: 384)
             use_bbox_feat: if True, then use [x, y, w, h, asp_ratio] with convnet visual features for classification of a BBox (default: True)
             bbox_hidden_dim: size of hidden representation of 5 bbox features, used when use_bbox_feat=True (default: 32)
+            n_additional_feat: num of additional features for each bbox to be used along with visual and bbox features
             trainable_convnet: if True then convnet weights will be modified while training (default: True)
             drop_prob: dropout probability (default: 0.2)
             class_names: list of n_classes string elements containing names of the classes (default: [0, 1, ..., n_classes-1])
@@ -31,7 +31,6 @@ class WebObjExtractionNet(nn.Module):
         self.n_classes = n_classes
         self.use_context = use_context
         self.use_attention = use_attention
-        self.n_attn_heads = n_attn_heads
         self.hidden_dim = hidden_dim
         self.use_bbox_feat = use_bbox_feat
         self.bbox_hidden_dim = bbox_hidden_dim
@@ -58,7 +57,8 @@ class WebObjExtractionNet(nn.Module):
 
         self.n_visual_feat = _convnet_output_size[1] * roi_output_size[0] * roi_output_size[1]
         self.n_bbox_feat = self.bbox_hidden_dim if self.use_bbox_feat else 0 # x, y, w, h, asp_rat of BBox projected to n_bbox_feat dims
-        self.n_own_feat = self.n_visual_feat + self.n_bbox_feat
+        self.n_additional_features = n_additional_features
+        self.n_own_feat = self.n_visual_feat + self.n_bbox_feat + self.n_additional_features
         self.n_context_feat = self.n_own_feat if self.use_context else 0
         self.n_total_feat = self.n_own_feat + self.n_context_feat
 
@@ -68,18 +68,22 @@ class WebObjExtractionNet(nn.Module):
                 nn.BatchNorm1d(self.n_bbox_feat),
                 nn.ReLU(),
             )
+        
+        if self.n_additional_features > 0:
+            self.bn_additional_feat = nn.BatchNorm1d(self.n_additional_features)
+        else:
+            self.bn_additional_feat = lambda x: x
 
         if self.use_context and self.use_attention:
-            self.q_encoders = nn.ModuleList([nn.Linear(self.n_own_feat, self.hidden_dim) for _ in range(self.n_attn_heads)])
-            self.k_encoders = nn.ModuleList([nn.Linear(self.n_context_feat, self.hidden_dim) for _ in range(self.n_attn_heads)])
+            self.q_encoder = nn.Linear(self.n_own_feat, self.hidden_dim)
+            self.k_encoder = nn.Linear(self.n_context_feat, self.hidden_dim)
             
-            self.attention_layers = nn.ModuleList([nn.Linear(2*self.hidden_dim, 1) for _ in range(self.n_attn_heads)])
+            self.attention_layer = nn.Linear(2*self.hidden_dim, 1)
             with torch.no_grad():
-                for attn_layer in self.attention_layers:
-                    attn_layer.weight.fill_(0)
+                    self.attention_layer.weight.fill_(0)
             
-            self.context_combiner = nn.Sequential(
-                nn.Linear(self.n_attn_heads * self.n_context_feat, self.n_context_feat),
+            self.context_encoder = nn.Sequential(
+                nn.Linear(self.n_context_feat, self.n_context_feat),
                 nn.BatchNorm1d(self.n_context_feat),
                 nn.ReLU(),
             )
@@ -93,16 +97,16 @@ class WebObjExtractionNet(nn.Module):
             nn.Linear(self.n_total_feat, self.n_classes),
         )
 
-        # print(self)
         print('Model Parameters:', count_parameters(self))
     
-    def forward(self, images, bboxes, context_indices):
+    def forward(self, images, bboxes, additional_features, context_indices):
         """
         Args:
             images: torch.Tensor of size [batch_size, 3, img_H, img_H]
             bboxes: torch.Tensor [total_n_bboxes_in_batch, 5]
                 each each of [batch_img_index, top_left_x, top_left_y, bottom_right_x, bottom_right_y]
-            context_indices: [total_n_bboxes_in_batch, n_context] i.e. bbox indices (0-indexed) of contexts for all n bboxes.
+            additional_features: torch.Tensor [total_n_bboxes_in_batch, n_additional_features]
+            context_indices: Torch.LongTensor [total_n_bboxes_in_batch, n_context] i.e. bbox indices (0-indexed) of contexts for all n bboxes.
                 If not enough found, rest are -1
         
         Returns:
@@ -122,9 +126,10 @@ class WebObjExtractionNet(nn.Module):
         else:
             bbox_features = bboxes[:, :0] # size [n_bboxes, 0]
         
-        ##### OWN VISUAL + BBOX FEATURES #####
+        ##### OWN VISUAL + BBOX FEATURES + ADDITIONAL FEATURES #####
         own_features = self.roi_pool(self.convnet(images), bboxes).view(batch_size, self.n_visual_feat)
-        own_features = torch.cat((own_features, bbox_features), dim=1)
+        additional_features = self.bn_additional_feat(additional_features)
+        own_features = torch.cat((own_features, bbox_features, additional_features), dim=1)
 
         ##### CONTEXT VISUAL + BBOX FEATURES USING SELF-ATTENTION #####
         if self.use_context:
@@ -134,27 +139,19 @@ class WebObjExtractionNet(nn.Module):
             value = own_feat_padded[context_indices.view(-1)].view(batch_size, n_context, self.n_context_feat) # context_features
 
             if self.use_attention:
-                all_head_attention_wts = []
-                all_head_context_representations = []
-                for head in range(self.n_attn_heads):
-                    query = self.q_encoders[head](own_features) # [batch_size, hidden_dim]
+                query = self.q_encoder(own_features) # [batch_size, hidden_dim]
 
-                    head_attention_wts = []
-                    for c in range(n_context):
-                        key = self.k_encoders[head](value[:, c, :]) # [batch_size, hidden_dim]
-                        curr_attention_wt = self.attention_layers[head](torch.cat((query, key), dim=1)) # [batch_size, 1]
-                        head_attention_wts.append(curr_attention_wt)
-
-                    head_attention_wts = torch.softmax(torch.cat(head_attention_wts, dim=1), dim=1) # [batch_size, n_context]
-                    all_head_attention_wts.append(head_attention_wts)
-                    
-                    head_context_representation = (head_attention_wts.unsqueeze(-1) * value).sum(1) # weighted avg of context bboxes [batch_size, n_context_feat]
-                    all_head_context_representations.append(head_context_representation)
+                attention_wts = []
+                for c in range(n_context):
+                    key = self.k_encoder(value[:, c, :]) # [batch_size, hidden_dim]
+                    curr_attention_wt = self.attention_layer(torch.cat((query, key), dim=1)) # [batch_size, 1]
+                    attention_wts.append(curr_attention_wt)
+                attention_wts = torch.softmax(torch.cat(attention_wts, dim=1), dim=1) # [batch_size, n_context]
                 
-                multihead_context_representation = torch.cat(all_head_context_representations, dim=1)
-                context_representation = self.context_combiner(multihead_context_representation) # [batch_size, n_context_feat]
+                context_representation = (attention_wts.unsqueeze(-1) * value).sum(1) # weighted avg of context bboxes [batch_size, n_context_feat]
+                context_representation = self.context_encoder(context_representation) # [batch_size, n_context_feat]
             else: # average of context features for context representation
-                context_representation = value.sum(1) / (context_indices != -1).sum(1).view(batch_size, 1) # [batch_size, n_context_feat]
+                context_representation = value.sum(dim=1) / (context_indices != -1).sum(dim=1).view(batch_size, 1) # [batch_size, n_context_feat]
         else:
             context_representation = own_features[:, :0] # size [n_bboxes, 0]
 

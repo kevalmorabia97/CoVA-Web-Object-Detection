@@ -15,19 +15,18 @@ def train_model(model, train_loader, optimizer, scheduler, criterion, n_epochs, 
     model.train()
 
     best_eval_acc = 0.0
-    patience = 7 # number of VAL Acc values observed after best value to stop training
-    min_delta = 1e-2 # min improvement in eval_acc value (in percentage) to be considered a valid improvement
+    patience = 10 # number of VAL Acc values observed after best value to stop training
     for epoch in range(1, n_epochs+1):
         start = time()
         epoch_loss, epoch_correct, n_bboxes = 0.0, 0.0, 0.0
-        for _, images, bboxes, context_indices, labels in train_loader:
+        for _, images, bboxes, additional_features, context_indices, labels in train_loader:
             labels = labels.to(device) # [total_n_bboxes_in_batch]
             n_bboxes += labels.shape[0]
             
             optimizer.zero_grad()
 
-            output = model(images.to(device), bboxes.to(device), context_indices.to(device)) # [total_n_bboxes_in_batch, n_classes]
-            predictions = output.argmax(dim=1)
+            output = model(images.to(device), bboxes.to(device), additional_features.to(device), context_indices.to(device)) # [total_n_bboxes_in_batch, n_classes]
+            predictions = output.argmax(dim=1) # [total_n_bboxes_in_batch]
             epoch_correct += (predictions == labels).sum().item()
             
             loss = criterion(output, labels)
@@ -42,7 +41,7 @@ def train_model(model, train_loader, optimizer, scheduler, criterion, n_epochs, 
             eval_acc = class_acc.mean()
             model.train()
 
-            if eval_acc - best_eval_acc > min_delta: # best so far so save checkpoint to restore later
+            if eval_acc > best_eval_acc: # best so far so save checkpoint to restore later
                 best_eval_acc = eval_acc
                 patience_count = 0
                 torch.save(model.state_dict(), model_save_file)
@@ -74,9 +73,9 @@ def evaluate_model(model, eval_loader, device, k=1, split_name='VAL', log_file='
     model.eval()
     n_classes = model.n_classes
     img_acc = [] # list of [img_id, price_acc (1/0), title_acc (1/0), image_acc (1/0)]
-    for img_ids, images, bboxes, context_indices, labels in eval_loader:
+    for img_ids, images, bboxes, additional_features, context_indices, labels in eval_loader:
         labels = labels.to(device) # [total_n_bboxes_in_batch]
-        output = model(images.to(device), bboxes.to(device), context_indices.to(device)) # [total_n_bboxes_in_batch, n_classes]
+        output = model(images.to(device), bboxes.to(device), additional_features.to(device), context_indices.to(device)) # [total_n_bboxes_in_batch, n_classes]
         
         batch_indices = torch.unique(bboxes[:,0]).long()
         for index in batch_indices: # for each image
