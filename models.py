@@ -10,21 +10,20 @@ class WebObjExtractionNet(nn.Module):
     def __init__(self, roi_output_size, img_H, n_classes, backbone='resnet', use_context=True, use_attention=True, hidden_dim=384, 
                  use_bbox_feat=True, bbox_hidden_dim=32, n_additional_features=0, trainable_convnet=True, drop_prob=0.2, class_names=None):
         """
-        Args:
-            roi_output_size: Tuple (int, int) which will be output of the roi_pool layer for each channel of convnet_feature
-            img_H: height of image given as input to the convnet. Image assumed to be of same W and H
-            n_classes: num of classes for BBoxes
-            backbone: string stating which convnet feature extractor to use. Allowed values: [alexnet, resnet (default)]
-            use_context: if True, use context for context_representation along with own_features (default: True) 
-            use_attention: if True, learn scores for all n_context contexts and take weighted avg for context_representation
-                NOTE: this parameter is not used if use_context = False
-            hidden_dim: size of hidden contextual representation, used when use_attention=True (default: 384)
-            use_bbox_feat: if True, then use [x, y, w, h, asp_ratio] with convnet visual features for classification of a BBox (default: True)
-            bbox_hidden_dim: size of hidden representation of 5 bbox features, used when use_bbox_feat=True (default: 32)
-            n_additional_feat: num of additional features for each bbox to be used along with visual and bbox features
-            trainable_convnet: if True then convnet weights will be modified while training (default: True)
-            drop_prob: dropout probability (default: 0.2)
-            class_names: list of n_classes string elements containing names of the classes (default: [0, 1, ..., n_classes-1])
+        roi_output_size: Tuple (int, int) which will be output of the roi_pool layer for each channel of convnet_feature
+        img_H: height of image given as input to the convnet. Image assumed to be of same W and H
+        n_classes: num of classes for BBoxes
+        backbone: string stating which convnet feature extractor to use. Allowed values: [alexnet, resnet (default)]
+        use_context: if True, use context for context_representation along with own_features (default: True) 
+        use_attention: if True, learn scores for all n_context contexts and take weighted avg for context_representation
+            NOTE: this parameter is not used if use_context=False
+        hidden_dim: size of hidden contextual representation, used when use_attention=True (default: 384)
+        use_bbox_feat: if True, then use [x,y,w,h,asp_ratio] with convnet visual features (default: True)
+        bbox_hidden_dim: size of hidden representation of 5 bbox features, used when use_bbox_feat=True (default: 32)
+        n_additional_feat: num of additional features for each bbox to be used along with visual and bbox features
+        trainable_convnet: if False then convnet weights will be freezed while training (default: True)
+        drop_prob: dropout probability (default: 0.2)
+        class_names: list of n_classes string elements containing names of the classes (default: [0, 1, ..., n_classes-1])
         """
         super(WebObjExtractionNet, self).__init__()
 
@@ -37,6 +36,7 @@ class WebObjExtractionNet(nn.Module):
         self.n_additional_features = n_additional_features
         self.class_names = np.arange(self.n_classes).astype(str) if class_names is None else class_names
 
+        ##### REPRESENTATION NETWORK (RN) #####
         if backbone == 'resnet':
             self.convnet = torchvision.models.resnet18(pretrained=True)
             modules = list(self.convnet.children())[:-5] # remove last few layers!
@@ -57,10 +57,8 @@ class WebObjExtractionNet(nn.Module):
         self.roi_pool = torchvision.ops.RoIPool(roi_output_size, spatial_scale)
 
         self.n_visual_feat = _convnet_output_size[1] * roi_output_size[0] * roi_output_size[1]
-        self.n_bbox_feat = self.bbox_hidden_dim if self.use_bbox_feat else 0 # x, y, w, h, asp_rat of BBox projected to n_bbox_feat dims
+        self.n_bbox_feat = self.bbox_hidden_dim if self.use_bbox_feat else 0 # [x,y,w,h,asp_rat] of BBox encoded to n_bbox_feat
         self.n_own_feat = self.n_visual_feat + self.n_bbox_feat + self.n_additional_features
-        self.n_context_feat = self.n_own_feat if self.use_context else 0
-        self.n_total_feat = self.n_own_feat + self.n_context_feat
 
         if self.use_bbox_feat:
             self.bbox_feat_encoder = nn.Sequential(
@@ -74,6 +72,8 @@ class WebObjExtractionNet(nn.Module):
         else:
             self.bn_additional_feat = lambda x: x
 
+        ##### CONTEXT ATTENTIVE NETWORK (CAN) #####
+        self.n_context_feat = self.n_own_feat if self.use_context else 0
         if self.use_context and self.use_attention:
             self.q_encoder = nn.Linear(self.n_own_feat, self.hidden_dim)
             self.k_encoder = nn.Linear(self.n_context_feat, self.hidden_dim)
@@ -88,6 +88,8 @@ class WebObjExtractionNet(nn.Module):
                 nn.ReLU(),
             )
         
+        ##### FC LAYERS #####
+        self.n_total_feat = self.n_own_feat + self.n_context_feat
         self.decoder = nn.Sequential(
             nn.Dropout(drop_prob),
             nn.Linear(self.n_total_feat, self.n_total_feat),
@@ -101,13 +103,12 @@ class WebObjExtractionNet(nn.Module):
     
     def forward(self, images, bboxes, additional_features, context_indices):
         """
-        Args:
-            images: torch.Tensor of size [batch_size, 3, img_H, img_H]
-            bboxes: torch.Tensor [total_n_bboxes_in_batch, 5]
-                each each of [batch_img_index, top_left_x, top_left_y, bottom_right_x, bottom_right_y]
-            additional_features: torch.Tensor [total_n_bboxes_in_batch, n_additional_features]
-            context_indices: Torch.LongTensor [total_n_bboxes_in_batch, n_context] i.e. bbox indices (0-indexed) of contexts for all n bboxes.
-                If not enough found, rest are -1
+        images: torch.Tensor of size [batch_size, 3, img_H, img_H]
+        bboxes: torch.Tensor [total_n_bboxes_in_batch, 5]
+            each of [batch_img_index, top_left_x, top_left_y, bottom_right_x, bottom_right_y]
+        additional_features: torch.Tensor [total_n_bboxes_in_batch, n_additional_features]
+        context_indices: Torch.LongTensor [total_n_bboxes_in_batch, n_context]
+            i.e. bbox indices (0-indexed) of contexts for all n bboxes. If not enough found, rest are -1
         
         Returns:
             prediction_scores: torch.Tensor of size [total_n_bboxes_in_batch, n_classes]
@@ -131,7 +132,7 @@ class WebObjExtractionNet(nn.Module):
         additional_features = self.bn_additional_feat(additional_features)
         own_features = torch.cat((own_features, bbox_features, additional_features), dim=1)
 
-        ##### CONTEXT VISUAL + BBOX FEATURES USING SELF-ATTENTION #####
+        ##### CONTEXT FEATURES USING SELF-ATTENTION #####
         if self.use_context:
             n_context = context_indices.shape[1]
             zero_feat = torch.zeros((1, self.n_own_feat)).to(images.device) # for -1 contexts i.e. extra padded
@@ -148,10 +149,10 @@ class WebObjExtractionNet(nn.Module):
                     attention_wts.append(curr_attention_wt)
                 attention_wts = torch.softmax(torch.cat(attention_wts, dim=1), dim=1) # [batch_size, n_context]
                 
-                context_representation = (attention_wts.unsqueeze(-1) * value).sum(1) # weighted avg of context bboxes [batch_size, n_context_feat]
+                context_representation = (attention_wts.unsqueeze(-1) * value).sum(1) # weighted avg of contexts [batch_size, n_context_feat]
                 context_representation = self.context_encoder(context_representation) # [batch_size, n_context_feat]
-            else: # average of context features for context representation
-                context_representation = value.sum(dim=1) / (context_indices != -1).sum(dim=1).view(batch_size, 1) # [batch_size, n_context_feat]
+            else: # average of context features for context representation [batch_size, n_context_feat]
+                context_representation = value.sum(dim=1) / (context_indices != -1).sum(dim=1).view(batch_size, 1)
         else:
             context_representation = own_features[:, :0] # size [n_bboxes, 0]
 
