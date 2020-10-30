@@ -123,8 +123,7 @@ criterion = nn.CrossEntropyLoss(reduction='sum').to(device)
 val_acc = train_model(model, train_loader, optimizer, scheduler, criterion, N_EPOCHS, device, val_loader, EVAL_INTERVAL, log_file, model_save_file)
 
 print('Evaluating on test data...')
-img_acc, class_acc = evaluate_model(model, test_loader, device, 1, 'TEST', log_file)
-_, class_acc_top2 = evaluate_model(model, test_loader, device, 2, 'TEST', log_file)
+img_acc, class_acc_test = evaluate_model(model, test_loader, device, 1, 'TEST', log_file)
 
 np.savetxt(test_acc_imgwise_file, img_acc, '%d,%.2f,%.2f,%.2f', ',', header='img_id,price_acc,title_acc,image_acc', comments='')
 
@@ -139,5 +138,8 @@ for c in range(1, N_CLASSES):
     print_and_log('%s Macro Acc: %.2f%%' % (CLASS_NAMES[c], macro_acc_test[c-1]), log_file)
 
 with open(fold_wise_acc_file, 'a') as f:
-    f.write('%s,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n' % (CV_FOLD, val_acc, class_acc[0], class_acc_top2[0], macro_acc_test[0],
-        class_acc[1], class_acc_top2[1], macro_acc_test[1], class_acc[2], class_acc_top2[2], macro_acc_test[2]))
+    if os.stat(fold_wise_acc_file).st_size == 0: # add header if file is empty
+        f.write('Fold,val_avg,price_acc,price_macro_acc,title_acc,title_macro_acc,image_acc,image_macro_acc\n')
+
+    f.write('%s,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n' % (CV_FOLD, val_acc, class_acc_test[0], macro_acc_test[0],
+        class_acc_test[1], macro_acc_test[1], class_acc_test[2], macro_acc_test[2]))
