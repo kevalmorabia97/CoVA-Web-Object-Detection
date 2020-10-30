@@ -34,6 +34,7 @@ class WebObjExtractionNet(nn.Module):
         self.hidden_dim = hidden_dim
         self.use_bbox_feat = use_bbox_feat
         self.bbox_hidden_dim = bbox_hidden_dim
+        self.n_additional_features = n_additional_features
         self.class_names = np.arange(self.n_classes).astype(str) if class_names is None else class_names
 
         if backbone == 'resnet':
@@ -57,7 +58,6 @@ class WebObjExtractionNet(nn.Module):
 
         self.n_visual_feat = _convnet_output_size[1] * roi_output_size[0] * roi_output_size[1]
         self.n_bbox_feat = self.bbox_hidden_dim if self.use_bbox_feat else 0 # x, y, w, h, asp_rat of BBox projected to n_bbox_feat dims
-        self.n_additional_features = n_additional_features
         self.n_own_feat = self.n_visual_feat + self.n_bbox_feat + self.n_additional_features
         self.n_context_feat = self.n_own_feat if self.use_context else 0
         self.n_total_feat = self.n_own_feat + self.n_context_feat
