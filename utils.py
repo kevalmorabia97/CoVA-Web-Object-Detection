@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 from PIL import Image
@@ -70,6 +69,8 @@ def visualize_bbox(img_path, attn_wt_file, img_save_dir):
 
     Save 3 files corresponding to 3 classes in img_save_dir (must exist)
     """
+    import matplotlib.pyplot as plt
+    
     class_names = {0:'BG', 1:'Price', 2:'Title', 3:'Image'}
 
     img = Image.open(img_path).convert('RGB')
