@@ -3,26 +3,24 @@ import os
 import sys
 import torch
 
+from constants import Constants
 from datasets import WebDataset, custom_collate_fn
 from models import WebObjExtractionNet
 from utils import visualize_bbox
 
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-
 assert len(sys.argv) == 2, 'Usage: python3 extract_attn_wts_and_visualize.py <cv_fold_number>'
-
-########## PARAMETERS for restoring saved_model ##########
-N_CLASSES = 4
-CLASS_NAMES = ['BG', 'Price', 'Title', 'Image']
-IMG_HEIGHT = 1280 # Image assumed to have same height and width
-
-DATA_DIR = '../data/' # Contains imgs/*.png and bboxes/*.pkl files
-OUTPUT_DIR = 'results_5-Fold_CV/'
-
 CV_FOLD = int(sys.argv[1])
-SPLIT_DIR = 'splits/'
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+N_CLASSES = Constants.N_CLASSES
+CLASS_NAMES = Constants.CLASS_NAMES
+IMG_HEIGHT = Constants.IMG_HEIGHT
+DATA_DIR = Constants.DATA_DIR
+SPLIT_DIR = Constants.SPLIT_DIR
+OUTPUT_DIR = Constants.OUTPUT_DIR
+
 FOLD_DIR = '%s/Fold-%d' % (SPLIT_DIR, CV_FOLD)
 test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, np.int32)
 
@@ -43,9 +41,9 @@ WEIGHT_DECAY = 1e-3
 DROP_PROB = 0.2
 SAMPLING_FRACTION = 0.8
 
-params = '%s lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d bbhd-%d af-%d wd-%.0e dp-%.1f sf-%.1f' % (BACKBONE, LEARNING_RATE, BATCH_SIZE,
-    USE_CONTEXT, CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM, ROI_OUTPUT[0], USE_BBOX_FEAT, BBOX_HIDDEN_DIM, USE_ADDITIONAL_FEAT,
-    WEIGHT_DECAY, DROP_PROB, SAMPLING_FRACTION)
+params = '%s lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d bbhd-%d af-%d wd-%.0e dp-%.1f sf-%.1f' % (BACKBONE, LEARNING_RATE,
+    BATCH_SIZE, USE_CONTEXT, CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM, ROI_OUTPUT[0], USE_BBOX_FEAT, BBOX_HIDDEN_DIM,
+    USE_ADDITIONAL_FEAT, WEIGHT_DECAY, DROP_PROB, SAMPLING_FRACTION)
 results_dir = '%s/%s' % (OUTPUT_DIR, params)
 model_save_file = '%s/Fold-%s saved_model.pth' % (results_dir, CV_FOLD)
 

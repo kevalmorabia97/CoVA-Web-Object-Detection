@@ -1,8 +1,37 @@
+import argparse
 import numpy as np
 import pickle
 from PIL import Image
 import random
 import torch
+
+
+def cmdline_args_parser():
+    """
+    Commandline argument parser
+    """
+    parser = argparse.ArgumentParser('Cmdline Arguments')
+    parser.add_argument('-d', '--device', type=int, default=0)
+    parser.add_argument('-e', '--n_epochs', type=int, default=100)
+    parser.add_argument('-bb', '--backbone', type=str, default='resnet', choices=['alexnet', 'resnet'])
+    parser.add_argument('--freeze_convnet', dest='freeze_convnet', action='store_true')
+    parser.add_argument('-lr', '--learning_rate', type=float, default=0.0005)
+    parser.add_argument('-bs', '--batch_size', type=int, default=5)
+    parser.add_argument('--no_context', dest='use_context', action='store_false')
+    parser.add_argument('-cs', '--context_size', type=int, default=12)
+    parser.add_argument('--no_attention', dest='attention', action='store_false')
+    parser.add_argument('-hd', '--hidden_dim', type=int, default=384)
+    parser.add_argument('-r', '--roi', type=int, default=3)
+    parser.add_argument('--no_bbox_feat', dest='bbox_feat', action='store_false')
+    parser.add_argument('-bbhd', '--bbox_hidden_dim', type=int, default=32)
+    parser.add_argument('--use_additional_feat', dest='additional_feat', action='store_true')
+    parser.add_argument('-wd', '--weight_decay', type=float, default=1e-3)
+    parser.add_argument('-dp', '--drop_prob', type=float, default=0.2)
+    parser.add_argument('-sf', '--sampling_fraction', type=float, default=0.8)
+    parser.add_argument('-nw', '--num_workers', type=int, default=5)
+    parser.add_argument('-cvf', '--cv_fold', type=int, required=True, choices=[1,2,3,4,5])
+    
+    return parser
 
 
 def compute_image_data_statistics(data_loader):
