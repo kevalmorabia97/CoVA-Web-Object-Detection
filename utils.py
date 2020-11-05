@@ -29,7 +29,7 @@ def cmdline_args_parser():
     parser.add_argument('-dp', '--drop_prob', type=float, default=0.2)
     parser.add_argument('-sf', '--sampling_fraction', type=float, default=0.8)
     parser.add_argument('-nw', '--num_workers', type=int, default=5)
-    parser.add_argument('-cvf', '--cv_fold', type=int, required=True, choices=[1,2,3,4,5])
+    parser.add_argument('-cvf', '--cv_fold', type=int, required=True, choices=[-1,1,2,3,4,5]) # cvf=-1 means fold_dir is set to split_dir
     
     return parser
 

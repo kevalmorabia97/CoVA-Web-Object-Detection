@@ -10,7 +10,7 @@ from train import evaluate_model
 from utils import cmdline_args_parser, print_and_log
 
 
-def evaluate(model, test_loader, test_domains, webpage_info, device, log_file, test_acc_imgwise_file, test_acc_domainwise_file):
+def evaluate(model, test_loader, device, log_file, test_acc_imgwise_file, webpage_info=None, test_domains=None, test_acc_domainwise_file=None):
     """
     Evaluate trained model on test dataset and compute classwise, imgwise (webpagewise), and domainwise accuracies
     Return classwise_acc and macro_acc (per class average of accuracy of each domain) of type np.array [n_classes]
@@ -21,15 +21,20 @@ def evaluate(model, test_loader, test_domains, webpage_info, device, log_file, t
     np.savetxt(test_acc_imgwise_file, img_acc, '%d,%.2f,%.2f,%.2f', ',', header='img_id,price_acc,title_acc,image_acc', comments='')
 
     class_names = model.class_names
-    with open (test_acc_domainwise_file, 'w') as f:
-        f.write('Domain,N_examples,%s,%s,%s\n' % (class_names[1], class_names[2], class_names[3]))
-        for domain in test_domains:
-            domain_imgs = webpage_info[np.isin(webpage_info[:,1], domain), 0].astype(np.int32)
-            domain_class_acc = img_acc[np.isin(img_acc[:,0], domain_imgs), 1:].mean(0)*100
-            f.write('%s,%d,%.2f,%.2f,%.2f\n' % (domain, len(domain_imgs), domain_class_acc[0], domain_class_acc[1], domain_class_acc[2]))
-    macro_acc_test = np.loadtxt(test_acc_domainwise_file, delimiter=',', skiprows=1, dtype=str)[:,2:].astype(np.float32).mean(0)
-    for c in range(1, len(class_names)): # class at index 0 is a 'Background' class
-        print_and_log('%s Macro Acc: %.2f%%' % (class_names[c], macro_acc_test[c-1]), log_file)
+    if test_domains is None or webpage_info is None or test_acc_domainwise_file is None:
+        macro_acc_test = np.zeros(len(class_names))
+    else: # compute macro accuracy
+        with open (test_acc_domainwise_file, 'w') as f:
+            f.write('Domain,N_examples,%s,%s,%s\n' % (class_names[1], class_names[2], class_names[3]))
+            for domain in test_domains:
+                domain_imgs = webpage_info[np.isin(webpage_info[:,1], domain), 0].astype(np.int32)
+                domain_class_acc = img_acc[np.isin(img_acc[:,0], domain_imgs), 1:].mean(0)*100
+                f.write('%s,%d,%.2f,%.2f,%.2f\n' % (domain, len(domain_imgs), domain_class_acc[0], domain_class_acc[1], domain_class_acc[2]))
+        
+        macro_acc_test = np.zeros(len(class_names))
+        macro_acc_test[1:] = np.loadtxt(test_acc_domainwise_file, delimiter=',', skiprows=1, dtype=str)[:,2:].astype(np.float32).mean(0)
+        for c in range(1, len(class_names)): # class at index 0 is a 'Background' class
+            print_and_log('%s Macro Acc: %.2f%%' % (class_names[c], macro_acc_test[c]), log_file)
     
     return class_acc_test, macro_acc_test
 
@@ -50,9 +55,21 @@ if __name__ == "__main__":
     
     CV_FOLD = args.cv_fold
     FOLD_DIR = '%s/Fold-%d' % (SPLIT_DIR, CV_FOLD)
+    if CV_FOLD == -1:
+        FOLD_DIR = SPLIT_DIR # use files from SPLIT_DIR
 
-    # for calculating macro accuracy
-    webpage_info = np.loadtxt('%s/webpage_info.csv' % SPLIT_DIR, str, delimiter=',', skiprows=1) # (img_id, domain) values
+    test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, np.int32)
+
+    # for calculating domainwise and macro accuracy if below files are available (optional)
+    webpage_info_file = '%s/webpage_info.csv' % FOLD_DIR
+    webpage_info = None
+    if os.path.isfile(webpage_info_file):
+        webpage_info = np.loadtxt(webpage_info_file, str, delimiter=',', skiprows=1) # (img_id, domain) values
+
+    test_domains_file = '%s/test_domains.txt' % FOLD_DIR
+    test_domains = None
+    if os.path.isfile(test_domains_file):
+        test_domains = np.loadtxt(test_domains_file, str)
 
     ########## HYPERPARAMETERS ##########
     BACKBONE = args.backbone
@@ -79,9 +96,6 @@ if __name__ == "__main__":
     assert os.path.exists(results_dir), 'Model does not seem to have been trained (run main.py) with the hyperparameters you provided'
 
     ########## TEST DATA LOADER ##########
-    test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, np.int32)
-    test_domains = np.loadtxt('%s/test_domains.txt' % FOLD_DIR, str)
-
     test_dataset = WebDataset(DATA_DIR, test_img_ids, USE_CONTEXT, CONTEXT_SIZE, USE_ADDITIONAL_FEAT, sampling_fraction=1)
     test_loader = DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=5,
                             collate_fn=custom_collate_fn, drop_last=False)
@@ -97,4 +111,4 @@ if __name__ == "__main__":
                                 BBOX_HIDDEN_DIM, n_additional_features, TRAINABLE_CONVNET, DROP_PROB, CLASS_NAMES).to(device)
     model.load_state_dict(torch.load(model_save_file, map_location=device))
     
-    evaluate(model, test_loader, test_domains, webpage_info, device, log_file, test_acc_imgwise_file, test_acc_domainwise_file)
+    evaluate(model, test_loader, device, log_file, test_acc_imgwise_file, webpage_info, test_domains, test_acc_domainwise_file)

@@ -38,7 +38,7 @@ def train_model(model, train_loader, optimizer, scheduler, criterion, n_epochs, 
         print_and_log('Epoch: %2d  Loss: %.4f  Accuracy: %.2f%%  (%.2fs)' % (epoch, epoch_loss/n_bboxes, 100*epoch_correct/n_bboxes, time()-start), log_file)
         if epoch == 1 or epoch % eval_interval == 0 or epoch == n_epochs:
             _, class_acc = evaluate_model(model, eval_loader, device, 1, 'VAL', log_file)
-            eval_acc = class_acc.mean()
+            eval_acc = class_acc[1:].mean() # only consider non-BG classes
             model.train()
 
             if eval_acc > best_eval_acc: # best so far so save checkpoint to restore later
@@ -97,11 +97,12 @@ def evaluate_model(model, eval_loader, device, k=1, split_name='VAL', log_file='
             img_acc.append(curr_img_acc)
         
     img_acc = np.array(img_acc, dtype=np.int32) # [n_imgs, 4] numpy array
-    class_acc = img_acc[:,1:].mean(0)*100 # accuracies of classes other than BG
+    class_acc = np.zeros(n_classes) # ignore class-0 (BG) accuracy
+    class_acc[1:] = img_acc[:,1:].mean(0)*100 # accuracies of classes other than BG
     
-    print_and_log('[%s] Avg_class_Accuracy: %.2f%% (%.2fs)' % (split_name, class_acc.mean(), time()-start), log_file)
+    print_and_log('[%s] Avg_class_Accuracy: %.2f%% (%.2fs)' % (split_name, class_acc[1:].mean(), time()-start), log_file)
     for c in range(1, n_classes):
-        print_and_log('%s top-%d-Acc: %.2f%%' % (model.class_names[c], k, class_acc[c-1]), log_file)
+        print_and_log('%s top-%d-Acc: %.2f%%' % (model.class_names[c], k, class_acc[c]), log_file)
     print_and_log('', log_file)
         
     return img_acc, class_acc

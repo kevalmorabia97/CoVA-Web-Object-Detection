@@ -22,6 +22,9 @@ SPLIT_DIR = Constants.SPLIT_DIR
 OUTPUT_DIR = Constants.OUTPUT_DIR
 
 FOLD_DIR = '%s/Fold-%d' % (SPLIT_DIR, CV_FOLD)
+if CV_FOLD == -1:
+    FOLD_DIR = SPLIT_DIR # use files from SPLIT_DIR
+
 test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, np.int32)
 
 # Parameters of model for which visualizations are to be created

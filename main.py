@@ -30,9 +30,23 @@ NUM_WORKERS = args.num_workers # multithreaded data loading
 
 CV_FOLD = args.cv_fold
 FOLD_DIR = '%s/Fold-%d' % (SPLIT_DIR, CV_FOLD)
+if CV_FOLD == -1:
+    FOLD_DIR = SPLIT_DIR # use files from SPLIT_DIR
 
-# for calculating macro accuracy
-webpage_info = np.loadtxt('%s/webpage_info.csv' % SPLIT_DIR, str, delimiter=',', skiprows=1) # (img_id, domain) values
+train_img_ids = np.loadtxt('%s/train_imgs.txt' % FOLD_DIR, np.int32)
+val_img_ids = np.loadtxt('%s/val_imgs.txt' % FOLD_DIR, np.int32)
+test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, np.int32)
+
+# for calculating domainwise and macro accuracy if below files are available (optional)
+webpage_info_file = '%s/webpage_info.csv' % FOLD_DIR
+webpage_info = None
+if os.path.isfile(webpage_info_file):
+    webpage_info = np.loadtxt(webpage_info_file, str, delimiter=',', skiprows=1) # (img_id, domain) values
+
+test_domains_file = '%s/test_domains.txt' % FOLD_DIR
+test_domains = None
+if os.path.isfile(test_domains_file):
+    test_domains = np.loadtxt(test_domains_file, str)
 
 ########## HYPERPARAMETERS ##########
 N_EPOCHS = args.n_epochs
@@ -63,11 +77,6 @@ if not os.path.exists(results_dir):
 
 print('\n%s Training on Fold-%s %s' % ('*'*20, CV_FOLD, '*'*20))
 ########## DATA LOADERS ##########
-train_img_ids = np.loadtxt('%s/train_imgs.txt' % FOLD_DIR, np.int32)
-val_img_ids = np.loadtxt('%s/val_imgs.txt' % FOLD_DIR, np.int32)
-test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, np.int32)
-test_domains = np.loadtxt('%s/test_domains.txt' % FOLD_DIR, str)
-
 train_loader, val_loader, test_loader = load_data(DATA_DIR, train_img_ids, val_img_ids, test_img_ids, USE_CONTEXT, CONTEXT_SIZE,
                                                   BATCH_SIZE, USE_ADDITIONAL_FEAT, SAMPLING_FRACTION, NUM_WORKERS)
 n_additional_features = train_loader.dataset.n_additional_features
@@ -104,12 +113,12 @@ criterion = nn.CrossEntropyLoss(reduction='sum').to(device)
 val_acc = train_model(model, train_loader, optimizer, scheduler, criterion, N_EPOCHS, device, val_loader, EVAL_INTERVAL,
                       log_file, model_save_file)
 
-class_acc_test, macro_acc_test = evaluate(model, test_loader, test_domains, webpage_info, device, log_file, 
-                                          test_acc_imgwise_file, test_acc_domainwise_file)
+class_acc_test, macro_acc_test = evaluate(model, test_loader, device, log_file, test_acc_imgwise_file, webpage_info,
+                                          test_domains, test_acc_domainwise_file)
 
 with open(fold_wise_acc_file, 'a') as f:
     if os.stat(fold_wise_acc_file).st_size == 0: # add header if file is empty
         f.write('Fold,val_avg,price_acc,price_macro_acc,title_acc,title_macro_acc,image_acc,image_macro_acc\n')
 
-    f.write('%s,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n' % (CV_FOLD, val_acc, class_acc_test[0], macro_acc_test[0],
-        class_acc_test[1], macro_acc_test[1], class_acc_test[2], macro_acc_test[2]))
+    f.write('%s,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n' % (CV_FOLD, val_acc, class_acc_test[1], macro_acc_test[1],
+        class_acc_test[2], macro_acc_test[2], class_acc_test[3], macro_acc_test[3]))
