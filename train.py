@@ -79,7 +79,7 @@ def evaluate_model(model, eval_loader, device, k=1, split_name='VAL', log_file='
         
         batch_indices = torch.unique(bboxes[:,0]).long()
         for index in batch_indices: # for each image
-            img_id = img_ids[index].item()
+            img_id = img_ids[index]
             img_indices = (bboxes[:,0] == index)
             labels_img = labels[img_indices].view(-1,1)
             output_img = output[img_indices]

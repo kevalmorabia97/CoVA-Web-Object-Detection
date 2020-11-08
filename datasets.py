@@ -54,7 +54,7 @@ class WebDataset(torchvision.datasets.VisionDataset):
             index (int): Index in range [0, self.__len__ - 1]
 
         Returns:
-            img_id: torch.LongTensor name of image
+            img_id: name of image (string)
             image: torch.Tensor of size [3,H,W].
             bboxes: torch.Tensor of size [n_bbox, 4] i.e. n bboxes each of [top_left_x, top_left_y, bottom_right_x, bottom_right_y]
             additional_features: torch.Tensor of size [n_bbox, n_additional_features]
@@ -62,7 +62,7 @@ class WebDataset(torchvision.datasets.VisionDataset):
                 If not enough found, rest are -1
             labels: torch.LongTensor of size [n_bbox] i.e. each value is label of the corresponding bbox
         """
-        img_id_tensor = torch.LongTensor([self.ids[index]]) # NOTE: if img_id is a string then this will have to be modified
+        img_id = self.ids[index]
         
         img = Image.open(self.imgs_paths[index]).convert('RGB')
         img = self.img_transform(img)
@@ -90,7 +90,7 @@ class WebDataset(torchvision.datasets.VisionDataset):
         else:
             context_indices = torch.empty((0, 0), dtype=torch.long)
 
-        return img_id_tensor, img, bboxes, additional_features, context_indices, labels
+        return img_id, img, bboxes, additional_features, context_indices, labels
 
     def __len__(self):
         return len(self.ids)
@@ -108,7 +108,7 @@ def custom_collate_fn(batch):
     
     Returns:
         batch: contains img_ids, images, bboxes, context_indices, labels
-            img_ids: torch.LongTensor names of images (to compute Macro Accuracies)
+            img_ids: names of images (string) to compute imgwise (webpagewise) and domainwise (macro) Accuracies
             images: torch.Tensor [N, 3, img_H, img_W]
             bboxes: torch.Tensor [total_n_bboxes_in_batch, 5]
                 each each of [batch_img_index, top_left_x, top_left_y, bottom_right_x, bottom_right_y]
@@ -125,7 +125,7 @@ def custom_collate_fn(batch):
     # context_indices = (ci_1, ..., ci_N) each element of size [n_bboxes_in_image, 2*context_size]
     # labels = (labels_1, ..., labels_N) each element of size [n_bboxes_in_image]
     
-    img_ids = torch.cat(img_ids)
+    img_ids = np.array(img_ids)
     images = torch.stack(images, 0)
     
     bboxes_with_batch_index = []

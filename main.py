@@ -33,9 +33,9 @@ FOLD_DIR = '%s/Fold-%d' % (SPLIT_DIR, CV_FOLD)
 if CV_FOLD == -1:
     FOLD_DIR = SPLIT_DIR # use files from SPLIT_DIR
 
-train_img_ids = np.loadtxt('%s/train_imgs.txt' % FOLD_DIR, np.int32)
-val_img_ids = np.loadtxt('%s/val_imgs.txt' % FOLD_DIR, np.int32)
-test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, np.int32)
+train_img_ids = np.loadtxt('%s/train_imgs.txt' % FOLD_DIR, str)
+val_img_ids = np.loadtxt('%s/val_imgs.txt' % FOLD_DIR, str)
+test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, str)
 
 # for calculating domainwise and macro accuracy if below files are available (optional)
 webpage_info_file = '%s/webpage_info.csv' % FOLD_DIR

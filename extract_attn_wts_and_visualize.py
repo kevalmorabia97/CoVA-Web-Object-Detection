@@ -25,7 +25,7 @@ FOLD_DIR = '%s/Fold-%d' % (SPLIT_DIR, CV_FOLD)
 if CV_FOLD == -1:
     FOLD_DIR = SPLIT_DIR # use files from SPLIT_DIR
 
-test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, np.int32)
+test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, str)
 
 # Parameters of model for which visualizations are to be created
 BACKBONE = 'resnet'
@@ -116,9 +116,9 @@ for index, img_id in enumerate(test_img_ids):
     labels = labels[labels > 0]
 
     dump_obj = torch.cat((bbox_coords, labels.float().view(-1,1), context_bbox_coords, attention_wts), dim=1).detach().cpu().numpy()
-    np.savetxt('%s/%d.csv' % (attention_vis_output_dir, img_id), dump_obj, delimiter=',', fmt='%.3f')
+    np.savetxt('%s/%s.csv' % (attention_vis_output_dir, img_id), dump_obj, delimiter=',', fmt='%.3f')
 
-    visualize_bbox('%s/imgs/%d.png' % (DATA_DIR, img_id), '%s/%d.csv' % (attention_vis_output_dir, img_id), attention_vis_output_dir)
+    visualize_bbox('%s/imgs/%s.png' % (DATA_DIR, img_id), '%s/%s.csv' % (attention_vis_output_dir, img_id), attention_vis_output_dir)
 
 print('Extracted attention visualizations and weights for for all images saved in %s' % (attention_vis_output_dir))
 print('Each image has a corresponding csv file that stores 4 cols as bbox coordinates, 1 col is label, 2*context_size*4 cols as context bbox coordinates, 2*context_size attention values that sum to 1')

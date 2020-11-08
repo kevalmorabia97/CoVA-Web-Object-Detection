@@ -18,7 +18,7 @@ def evaluate(model, test_loader, device, log_file, test_acc_imgwise_file, webpag
     print('Evaluating classwise, imgwise (webpagewise), and domainwise accuracies on test data...')
     img_acc, class_acc_test = evaluate_model(model, test_loader, device, 1, 'TEST', log_file)
 
-    np.savetxt(test_acc_imgwise_file, img_acc, '%d,%.2f,%.2f,%.2f', ',', header='img_id,price_acc,title_acc,image_acc', comments='')
+    np.savetxt(test_acc_imgwise_file, img_acc, '%s,%.2f,%.2f,%.2f', ',', header='img_id,price_acc,title_acc,image_acc', comments='')
 
     class_names = model.class_names
     if test_domains is None or webpage_info is None or test_acc_domainwise_file is None:
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     if CV_FOLD == -1:
         FOLD_DIR = SPLIT_DIR # use files from SPLIT_DIR
 
-    test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, np.int32)
+    test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, str)
 
     # for calculating domainwise and macro accuracy if below files are available (optional)
     webpage_info_file = '%s/webpage_info.csv' % FOLD_DIR

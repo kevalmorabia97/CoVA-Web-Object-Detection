@@ -34,28 +34,6 @@ def cmdline_args_parser():
     return parser
 
 
-def compute_image_data_statistics(data_loader):
-    """
-    Return the channel wise mean and std deviation for images loaded by `data_loader` (loads WebDataset defined in `datasets.py`)
-    Should be computer on train+val data
-    """
-    mean = 0.
-    std = 0.
-    n_samples = 0.
-
-    for images, bboxes, labels in data_loader:
-        batch_samples = images.size(0)
-        images = images.view(batch_samples, images.size(1), -1)
-        mean += images.mean(2).sum(0)
-        std += images.std(2).sum(0)
-        n_samples += batch_samples
-
-    mean /= n_samples
-    std /= n_samples
-
-    return mean, std
-
-
 def count_parameters(model):
     """
     Return the number of trainable parameters in `model`
