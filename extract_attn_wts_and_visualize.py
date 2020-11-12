@@ -5,7 +5,7 @@ import torch
 
 from constants import Constants
 from datasets import WebDataset, custom_collate_fn
-from models import WebObjExtractionNet
+from models import VAMWOD
 from utils import visualize_bbox
 
 
@@ -57,8 +57,8 @@ if not os.path.exists(attention_vis_output_dir):
 ########## DATA LOADERS ##########
 dataset = WebDataset(DATA_DIR, test_img_ids, USE_CONTEXT, CONTEXT_SIZE, USE_ADDITIONAL_FEAT, sampling_fraction=1)
 n_additional_features = dataset.n_additional_features
-model = WebObjExtractionNet(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, USE_BBOX_FEAT,
-                            BBOX_HIDDEN_DIM, n_additional_features, TRAINABLE_CONVNET, DROP_PROB, CLASS_NAMES).to(device)
+model = VAMWOD(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, USE_BBOX_FEAT,
+               BBOX_HIDDEN_DIM, n_additional_features, TRAINABLE_CONVNET, DROP_PROB, CLASS_NAMES).to(device)
 model.load_state_dict(torch.load(model_save_file, map_location=device))
 model.eval()
 

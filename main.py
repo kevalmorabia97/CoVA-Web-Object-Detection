@@ -6,7 +6,7 @@ import torch.nn as nn
 from constants import Constants
 from datasets import load_data
 from evaluate import evaluate
-from models import WebObjExtractionNet
+from models import VAMWOD
 from train import train_model
 from utils import cmdline_args_parser, print_and_log, set_all_seeds
 
@@ -104,8 +104,8 @@ print_and_log('Dropout Probability: %.2f' % (DROP_PROB), log_file)
 print_and_log('Sampling Fraction: %.2f\n' % (SAMPLING_FRACTION), log_file)
 
 ########## TRAIN MODEL ##########
-model = WebObjExtractionNet(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, USE_BBOX_FEAT,
-                            BBOX_HIDDEN_DIM, n_additional_features, TRAINABLE_CONVNET, DROP_PROB, CLASS_NAMES).to(device)
+model = VAMWOD(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, USE_BBOX_FEAT,
+               BBOX_HIDDEN_DIM, n_additional_features, TRAINABLE_CONVNET, DROP_PROB, CLASS_NAMES).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=1) # No LR Scheduling
 criterion = nn.CrossEntropyLoss(reduction='sum').to(device)

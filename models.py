@@ -6,10 +6,12 @@ import torchvision
 from utils import count_parameters
 
 
-class WebObjExtractionNet(nn.Module):
+class VAMWOD(nn.Module):
     def __init__(self, roi_output_size, img_H, n_classes, backbone='resnet', use_context=True, use_attention=True, hidden_dim=384, 
                  use_bbox_feat=True, bbox_hidden_dim=32, n_additional_features=0, trainable_convnet=True, drop_prob=0.2, class_names=None):
         """
+        Implementation of our Visual Attention-based Model for Webpage Object Detection (VAMWOD)
+
         roi_output_size: Tuple (int, int) which will be output of the roi_pool layer for each channel of convnet_feature
         img_H: height of image given as input to the convnet. Image assumed to be of same W and H
         n_classes: num of classes for BBoxes
@@ -25,7 +27,7 @@ class WebObjExtractionNet(nn.Module):
         drop_prob: dropout probability (default: 0.2)
         class_names: list of n_classes string elements containing names of the classes (default: [0, 1, ..., n_classes-1])
         """
-        super(WebObjExtractionNet, self).__init__()
+        super(VAMWOD, self).__init__()
 
         self.n_classes = n_classes
         self.use_context = use_context

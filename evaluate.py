@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 from constants import Constants
 from datasets import custom_collate_fn, WebDataset
-from models import WebObjExtractionNet
+from models import VAMWOD
 from train import evaluate_model
 from utils import cmdline_args_parser, print_and_log
 
@@ -107,8 +107,8 @@ if __name__ == "__main__":
     model_save_file = '%s/Fold-%s saved_model.pth' % (results_dir, CV_FOLD)
 
     ########## RESTORE TRAINED MODEL ##########
-    model = WebObjExtractionNet(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, USE_BBOX_FEAT,
-                                BBOX_HIDDEN_DIM, n_additional_features, TRAINABLE_CONVNET, DROP_PROB, CLASS_NAMES).to(device)
+    model = VAMWOD(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, USE_BBOX_FEAT,
+                   BBOX_HIDDEN_DIM, n_additional_features, TRAINABLE_CONVNET, DROP_PROB, CLASS_NAMES).to(device)
     model.load_state_dict(torch.load(model_save_file, map_location=device))
     
     evaluate(model, test_loader, device, log_file, test_acc_imgwise_file, webpage_info, test_domains, test_acc_domainwise_file)
