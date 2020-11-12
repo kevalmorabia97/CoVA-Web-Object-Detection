@@ -1,2 +1,2 @@
-# Web-Object-Extraction-PyTorch
-Using Computer Vision to Extract Product Information from a Web Page by exploiting HTML DOM tree structure!
+# VAMWOD-Web-Object-Detection-PyTorch
+Implementation of our Visual Attention-based Model for Webpage Object Detection (VAMWOD)
