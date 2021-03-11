@@ -15,7 +15,7 @@ def train_model(model, train_loader, optimizer, scheduler, criterion, n_epochs, 
     model.train()
 
     best_eval_acc = 0.0
-    patience = 10 # number of VAL Acc values observed after best value to stop training
+    patience = 7 # number of VAL Acc values observed after best value to stop training
     for epoch in range(1, n_epochs+1):
         start = time()
         epoch_loss, epoch_correct, n_bboxes = 0.0, 0.0, 0.0
