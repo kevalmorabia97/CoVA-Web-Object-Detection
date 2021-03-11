@@ -16,7 +16,7 @@ class VAMWOD(nn.Module):
         img_H: height of image given as input to the convnet. Image assumed to be of same W and H
         n_classes: num of classes for BBoxes
         backbone: string stating which convnet feature extractor to use. Allowed values: [alexnet, resnet (default)]
-        use_context: if True, use context for context_representation along with own_features (default: True) 
+        use_context: if True, use context for context_representation along with h_i (default: True) 
         use_attention: if True, learn scores for all n_context contexts and take weighted avg for context_representation
             NOTE: this parameter is not used if use_context=False
         hidden_dim: size of hidden contextual representation, used when use_attention=True (default: 384)
@@ -32,7 +32,6 @@ class VAMWOD(nn.Module):
         self.n_classes = n_classes
         self.use_context = use_context
         self.use_attention = use_attention
-        self.hidden_dim = hidden_dim
         self.use_bbox_feat = use_bbox_feat
         self.bbox_hidden_dim = bbox_hidden_dim
         self.n_additional_features = n_additional_features
@@ -60,7 +59,7 @@ class VAMWOD(nn.Module):
 
         self.n_visual_feat = _convnet_output_size[1] * roi_output_size[0] * roi_output_size[1]
         self.n_bbox_feat = self.bbox_hidden_dim if self.use_bbox_feat else 0 # [x,y,w,h,asp_rat] of BBox encoded to n_bbox_feat
-        self.n_own_feat = self.n_visual_feat + self.n_bbox_feat + self.n_additional_features
+        self.n_feat = self.n_visual_feat + self.n_bbox_feat + self.n_additional_features
 
         if self.use_bbox_feat:
             self.bbox_feat_encoder = nn.Sequential(
@@ -75,23 +74,11 @@ class VAMWOD(nn.Module):
             self.bn_additional_feat = lambda x: x
 
         ##### CONTEXT ATTENTIVE NETWORK (CAN) #####
-        self.n_context_feat = self.n_own_feat if self.use_context else 0
         if self.use_context and self.use_attention:
-            self.q_encoder = nn.Linear(self.n_own_feat, self.hidden_dim)
-            self.k_encoder = nn.Linear(self.n_context_feat, self.hidden_dim)
-            
-            self.attention_layer = nn.Linear(2*self.hidden_dim, 1)
-            with torch.no_grad():
-                    self.attention_layer.weight.fill_(0)
-            
-            self.context_encoder = nn.Sequential(
-                nn.Linear(self.n_context_feat, self.n_context_feat),
-                nn.BatchNorm1d(self.n_context_feat),
-                nn.ReLU(),
-            )
+            self.gat = GraphAttentionLayer(self.n_feat, hidden_dim)
         
         ##### FC LAYERS #####
-        self.n_total_feat = self.n_own_feat + self.n_context_feat
+        self.n_total_feat = self.n_feat + self.n_feat
         self.decoder = nn.Sequential(
             nn.Dropout(drop_prob),
             nn.Linear(self.n_total_feat, self.n_total_feat),
@@ -106,23 +93,23 @@ class VAMWOD(nn.Module):
     def forward(self, images, bboxes, additional_features, context_indices):
         """
         images: torch.Tensor of size [batch_size, 3, img_H, img_H]
-        bboxes: torch.Tensor [total_n_bboxes_in_batch, 5]
+        bboxes: torch.Tensor [N, 5], N = total_n_bboxes_in_batch
             each of [batch_img_index, top_left_x, top_left_y, bottom_right_x, bottom_right_y]
-        additional_features: torch.Tensor [total_n_bboxes_in_batch, n_additional_features]
-        context_indices: Torch.LongTensor [total_n_bboxes_in_batch, n_context]
-            i.e. bbox indices (0-indexed) of contexts for all n bboxes. If not enough found, rest are -1
+        additional_features: torch.Tensor [N, n_additional_features]
+        context_indices: Torch.LongTensor [N, n_context]
+            indices (0 to N-1) of `n_context` bboxes that are in context for a given bbox. If not enough found, rest are -1
         
         Returns:
-            prediction_scores: torch.Tensor of size [total_n_bboxes_in_batch, n_classes]
+            prediction_scores: torch.Tensor of size [N, n_classes]
         """
-        batch_size = bboxes.shape[0]
+        N = bboxes.shape[0]
 
         ##### BBOX FEATURES #####
         if self.use_bbox_feat:
             bbox_features = bboxes[:, 1:].clone() # discard batch_img_index column
             bbox_features[:, 2:] -= bbox_features[:, :2] # convert to [top_left_x, top_left_y, width, height]
             
-            bbox_asp_ratio = (bbox_features[:, 2]/bbox_features[:, 3]).view(batch_size, 1)
+            bbox_asp_ratio = (bbox_features[:, 2]/bbox_features[:, 3]).view(N, 1)
             bbox_features = torch.cat((bbox_features, bbox_asp_ratio), dim=1)
             
             bbox_features = self.bbox_feat_encoder(bbox_features)
@@ -130,31 +117,20 @@ class VAMWOD(nn.Module):
             bbox_features = bboxes[:, :0] # size [n_bboxes, 0]
         
         ##### OWN VISUAL + BBOX FEATURES + ADDITIONAL FEATURES #####
-        own_features = self.roi_pool(self.convnet(images), bboxes).view(batch_size, self.n_visual_feat)
+        own_features = self.roi_pool(self.convnet(images), bboxes).view(N, self.n_visual_feat)
         additional_features = self.bn_additional_feat(additional_features)
         own_features = torch.cat((own_features, bbox_features, additional_features), dim=1)
 
         ##### CONTEXT FEATURES USING SELF-ATTENTION #####
         if self.use_context:
-            n_context = context_indices.shape[1]
-            zero_feat = torch.zeros((1, self.n_own_feat)).to(images.device) # for -1 contexts i.e. extra padded
-            own_feat_padded = torch.cat((own_features, zero_feat), dim=0)
-            value = own_feat_padded[context_indices.view(-1)].view(batch_size, n_context, self.n_context_feat) # context_features
-
             if self.use_attention:
-                query = self.q_encoder(own_features) # [batch_size, hidden_dim]
-
-                attention_wts = []
-                for c in range(n_context):
-                    key = self.k_encoder(value[:, c, :]) # [batch_size, hidden_dim]
-                    curr_attention_wt = self.attention_layer(torch.cat((query, key), dim=1)) # [batch_size, 1]
-                    attention_wts.append(curr_attention_wt)
-                attention_wts = torch.softmax(torch.cat(attention_wts, dim=1), dim=1) # [batch_size, n_context]
-                
-                context_representation = (attention_wts.unsqueeze(-1) * value).sum(1) # weighted avg of contexts [batch_size, n_context_feat]
-                context_representation = self.context_encoder(context_representation) # [batch_size, n_context_feat]
-            else: # average of context features for context representation [batch_size, n_context_feat]
-                context_representation = value.sum(dim=1) / (context_indices != -1).sum(dim=1).view(batch_size, 1)
+                context_representation = self.gat(own_features, context_indices)
+            else: # average of context features for context representation [N, n_feat]
+                n_context = context_indices.shape[1]
+                zero_feat = torch.zeros((1, self.n_feat)).to(images.device) # for -1 contexts i.e. extra padded
+                own_feat_padded = torch.cat((own_features, zero_feat), dim=0)
+                h_j = own_feat_padded[context_indices.view(-1)].view(N, n_context, self.n_feat) # context_features
+                context_representation = h_j.sum(dim=1) / (context_indices != -1).sum(dim=1).view(N, 1)
         else:
             context_representation = own_features[:, :0] # size [n_bboxes, 0]
 
@@ -163,3 +139,59 @@ class VAMWOD(nn.Module):
         output = self.decoder(combined_feat)
 
         return output
+
+
+class GraphAttentionLayer(nn.Module):
+    """
+    Simple GAT layer, similar to https://arxiv.org/abs/1710.10903
+    """
+    def __init__(self, in_features, hidden_dim, alpha=0.2):
+        super(GraphAttentionLayer, self).__init__()
+        self.in_features = in_features
+        self.hidden_dim = hidden_dim
+
+        self.W_i = nn.Linear(self.in_features, self.hidden_dim, bias=False)
+        self.W_j = nn.Linear(self.in_features, self.hidden_dim, bias=False)
+        # nn.init.xavier_uniform_(self.W_i.weight, gain=1.414)
+        # nn.init.xavier_uniform_(self.W_j.weight, gain=1.414)
+        
+        self.attention_layer = nn.Linear(2*self.hidden_dim, 1)
+        # with torch.no_grad():
+        #     self.attention_layer.weight.fill_(0)
+
+        self.leakyrelu = nn.LeakyReLU(alpha)
+
+        # self.context_encoder = nn.Sequential(
+        #     nn.Linear(self.n_feat, self.n_feat),
+        #     nn.BatchNorm1d(self.n_feat),
+        #     nn.ReLU(),
+        # )
+
+    def forward(self, h_i, context_indices):
+        """
+        h_i: features for all bboxes torch.Tensor of shape [N, in_features]
+        context_indices: Torch.LongTensor [N, n_context]
+            indices (0 to N-1) of `n_context` bboxes that are in context for a given bbox. If not enough found, rest are -1
+        """
+        N, n_context = context_indices.shape
+
+        zero_feat = torch.zeros((1, self.in_features)).to(h_i.device) # to map -1 contexts to zero_feat
+        h_i_padded = torch.cat((h_i, zero_feat), dim=0)
+        h_j = h_i_padded[context_indices.view(-1)].view(N, n_context, self.in_features) # context_features
+
+        Wh_i = self.W_i(h_i) # [N, hidden_dim]
+        Wh_i_repeated = Wh_i.repeat_interleave(n_context, dim=0).view(N, n_context, self.hidden_dim)
+
+        Wh_j = self.W_j(h_j) # [N, n_context, hidden_dim]
+
+        attention_wts = self.attention_layer(torch.cat((Wh_i_repeated, Wh_j), dim=2)).squeeze(2) # [N, n_context]
+        attention_wts = self.leakyrelu(attention_wts)
+
+        minus_inf = -9e15*torch.ones_like(attention_wts)
+        attention_wts = torch.where(context_indices >= 0, attention_wts, minus_inf)
+        attention_wts = torch.softmax(attention_wts, dim=1) # [N, n_context]
+        
+        h_prime = (attention_wts.unsqueeze(-1) * h_j).sum(1) # weighted avg of contexts [N, in_features????????????????]
+        # h_prime = self.context_encoder(context_representation) # [N, in_features]
+
+        return h_prime
