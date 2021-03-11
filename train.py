@@ -19,13 +19,13 @@ def train_model(model, train_loader, optimizer, scheduler, criterion, n_epochs, 
     for epoch in range(1, n_epochs+1):
         start = time()
         epoch_loss, epoch_correct, n_bboxes = 0.0, 0.0, 0.0
-        for _, images, bboxes, additional_features, context_indices, labels in train_loader:
+        for _, images, bboxes, additional_feats, context_indices, labels in train_loader:
             labels = labels.to(device) # [total_n_bboxes_in_batch]
             n_bboxes += labels.shape[0]
             
             optimizer.zero_grad()
 
-            output = model(images.to(device), bboxes.to(device), additional_features.to(device), context_indices.to(device)) # [total_n_bboxes_in_batch, n_classes]
+            output = model(images.to(device), bboxes.to(device), additional_feats.to(device), context_indices.to(device)) # [total_n_bboxes_in_batch, n_classes]
             predictions = output.argmax(dim=1) # [total_n_bboxes_in_batch]
             epoch_correct += (predictions == labels).sum().item()
             
@@ -73,9 +73,9 @@ def evaluate_model(model, eval_loader, device, k=1, split_name='VAL', log_file='
     model.eval()
     n_classes = model.n_classes
     img_acc = [] # list of [img_id, price_acc (1/0), title_acc (1/0), image_acc (1/0)]
-    for img_ids, images, bboxes, additional_features, context_indices, labels in eval_loader:
+    for img_ids, images, bboxes, additional_feats, context_indices, labels in eval_loader:
         labels = labels.to(device) # [total_n_bboxes_in_batch]
-        output = model(images.to(device), bboxes.to(device), additional_features.to(device), context_indices.to(device)) # [total_n_bboxes_in_batch, n_classes]
+        output = model(images.to(device), bboxes.to(device), additional_feats.to(device), context_indices.to(device)) # [total_n_bboxes_in_batch, n_classes]
         
         batch_indices = torch.unique(bboxes[:,0]).long()
         for index in batch_indices: # for each image

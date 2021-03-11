@@ -13,8 +13,6 @@ def cmdline_args_parser():
     parser = argparse.ArgumentParser('Cmdline Arguments')
     parser.add_argument('-d', '--device', type=int, default=0)
     parser.add_argument('-e', '--n_epochs', type=int, default=50)
-    parser.add_argument('-bb', '--backbone', type=str, default='resnet', choices=['alexnet', 'resnet'])
-    parser.add_argument('--freeze_convnet', dest='freeze_convnet', action='store_true')
     parser.add_argument('-lr', '--learning_rate', type=float, default=0.0005)
     parser.add_argument('-bs', '--batch_size', type=int, default=5)
     parser.add_argument('--no_context', dest='use_context', action='store_false')

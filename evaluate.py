@@ -72,8 +72,6 @@ if __name__ == "__main__":
         test_domains = np.loadtxt(test_domains_file, str)
 
     ########## HYPERPARAMETERS ##########
-    BACKBONE = args.backbone
-    TRAINABLE_CONVNET = not args.freeze_convnet
     LEARNING_RATE = args.learning_rate
     BATCH_SIZE = args.batch_size
     USE_CONTEXT = args.use_context
@@ -88,7 +86,7 @@ if __name__ == "__main__":
     DROP_PROB = args.drop_prob
     SAMPLING_FRACTION = args.sampling_fraction if (args.sampling_fraction >= 0 and args.sampling_fraction <= 1) else 1
 
-    params = '%s lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d bbhd-%d af-%d wd-%.0e dp-%.1f sf-%.1f' % (BACKBONE, LEARNING_RATE,
+    params = 'lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d bbhd-%d af-%d wd-%.0e dp-%.1f sf-%.1f' % (LEARNING_RATE,
         BATCH_SIZE, USE_CONTEXT, CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM, ROI_OUTPUT[0], USE_BBOX_FEAT, BBOX_HIDDEN_DIM,
         USE_ADDITIONAL_FEAT, WEIGHT_DECAY, DROP_PROB, SAMPLING_FRACTION)
     results_dir = '%s/%s' % (OUTPUT_DIR, params)
@@ -99,7 +97,7 @@ if __name__ == "__main__":
     test_dataset = WebDataset(DATA_DIR, test_img_ids, USE_CONTEXT, CONTEXT_SIZE, USE_ADDITIONAL_FEAT, sampling_fraction=1)
     test_loader = DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=5,
                             collate_fn=custom_collate_fn, drop_last=False)
-    n_additional_features = test_dataset.n_additional_features
+    n_additional_feat = test_dataset.n_additional_feat
 
     log_file = 'Fold-%s test_acc_classwise.txt' % (CV_FOLD) # classwise results saved here
     test_acc_imgwise_file = 'Fold-%s test_acc_imgwise.csv' % (CV_FOLD) # imgwise (webpagewise) results saved here
@@ -107,8 +105,8 @@ if __name__ == "__main__":
     model_save_file = '%s/Fold-%s saved_model.pth' % (results_dir, CV_FOLD)
 
     ########## RESTORE TRAINED MODEL ##########
-    model = VAMWOD(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, USE_BBOX_FEAT,
-                   BBOX_HIDDEN_DIM, n_additional_features, TRAINABLE_CONVNET, DROP_PROB, CLASS_NAMES).to(device)
+    model = VAMWOD(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, USE_BBOX_FEAT,
+                   BBOX_HIDDEN_DIM, n_additional_feat, DROP_PROB, CLASS_NAMES).to(device)
     model.load_state_dict(torch.load(model_save_file, map_location=device))
     
     evaluate(model, test_loader, device, log_file, test_acc_imgwise_file, webpage_info, test_domains, test_acc_domainwise_file)

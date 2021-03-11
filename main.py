@@ -50,8 +50,6 @@ if os.path.isfile(test_domains_file):
 
 ########## HYPERPARAMETERS ##########
 N_EPOCHS = args.n_epochs
-BACKBONE = args.backbone
-TRAINABLE_CONVNET = not args.freeze_convnet
 LEARNING_RATE = args.learning_rate
 BATCH_SIZE = args.batch_size
 USE_CONTEXT = args.use_context
@@ -66,7 +64,7 @@ WEIGHT_DECAY = args.weight_decay
 DROP_PROB = args.drop_prob
 SAMPLING_FRACTION = args.sampling_fraction if (args.sampling_fraction >= 0 and args.sampling_fraction <= 1) else 1
 
-params = '%s lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d bbhd-%d af-%d wd-%.0e dp-%.1f sf-%.1f' % (BACKBONE, LEARNING_RATE,
+params = 'lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d bbhd-%d af-%d wd-%.0e dp-%.1f sf-%.1f' % (LEARNING_RATE,
     BATCH_SIZE, USE_CONTEXT, CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM, ROI_OUTPUT[0], USE_BBOX_FEAT, BBOX_HIDDEN_DIM,
     USE_ADDITIONAL_FEAT, WEIGHT_DECAY, DROP_PROB, SAMPLING_FRACTION)
 results_dir = '%s/%s' % (OUTPUT_DIR, params)
@@ -79,7 +77,7 @@ print('\n%s Training on Fold-%s %s' % ('*'*20, CV_FOLD, '*'*20))
 ########## DATA LOADERS ##########
 train_loader, val_loader, test_loader = load_data(DATA_DIR, train_img_ids, val_img_ids, test_img_ids, USE_CONTEXT, CONTEXT_SIZE,
                                                   BATCH_SIZE, USE_ADDITIONAL_FEAT, SAMPLING_FRACTION, NUM_WORKERS)
-n_additional_features = train_loader.dataset.n_additional_features
+n_additional_feat = train_loader.dataset.n_additional_feat
 
 log_file = '%s/Fold-%s logs.txt' % (results_dir, CV_FOLD)
 test_acc_imgwise_file = '%s/Fold-%s test_acc_imgwise.csv' % (results_dir, CV_FOLD)
@@ -87,9 +85,7 @@ test_acc_domainwise_file = '%s/Fold-%s test_acc_domainwise.csv' % (results_dir, 
 model_save_file = '%s/Fold-%s saved_model.pth' % (results_dir, CV_FOLD)
 
 print('logs will be saved in \"%s\"' % (log_file))
-print_and_log('Backbone Convnet: %s' % (BACKBONE), log_file, 'w')
-print_and_log('Trainable Convnet: %s' % (TRAINABLE_CONVNET), log_file)
-print_and_log('Learning Rate: %.0e' % (LEARNING_RATE), log_file)
+print_and_log('Learning Rate: %.0e' % (LEARNING_RATE), log_file, 'w')
 print_and_log('Batch Size: %d' % (BATCH_SIZE), log_file)
 print_and_log('Use Context: %s' % (USE_CONTEXT), log_file)
 print_and_log('Context Size: %d' % (CONTEXT_SIZE), log_file)
@@ -104,8 +100,8 @@ print_and_log('Dropout Probability: %.2f' % (DROP_PROB), log_file)
 print_and_log('Sampling Fraction: %.2f\n' % (SAMPLING_FRACTION), log_file)
 
 ########## TRAIN MODEL ##########
-model = VAMWOD(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, USE_BBOX_FEAT,
-               BBOX_HIDDEN_DIM, n_additional_features, TRAINABLE_CONVNET, DROP_PROB, CLASS_NAMES).to(device)
+model = VAMWOD(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, USE_BBOX_FEAT,
+               BBOX_HIDDEN_DIM, n_additional_feat, DROP_PROB, CLASS_NAMES).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=1) # No LR Scheduling
 criterion = nn.CrossEntropyLoss(reduction='sum').to(device)

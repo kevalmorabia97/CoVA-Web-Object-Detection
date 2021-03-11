@@ -28,8 +28,6 @@ if CV_FOLD == -1:
 test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, str)
 
 # Parameters of model for which visualizations are to be created
-BACKBONE = 'resnet'
-TRAINABLE_CONVNET = True
 LEARNING_RATE = 5e-4
 BATCH_SIZE = 5
 USE_CONTEXT = True # this should be True
@@ -44,7 +42,7 @@ WEIGHT_DECAY = 1e-3
 DROP_PROB = 0.2
 SAMPLING_FRACTION = 0.9
 
-params = '%s lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d bbhd-%d af-%d wd-%.0e dp-%.1f sf-%.1f' % (BACKBONE, LEARNING_RATE,
+params = 'lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d bbhd-%d af-%d wd-%.0e dp-%.1f sf-%.1f' % (LEARNING_RATE,
     BATCH_SIZE, USE_CONTEXT, CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM, ROI_OUTPUT[0], USE_BBOX_FEAT, BBOX_HIDDEN_DIM,
     USE_ADDITIONAL_FEAT, WEIGHT_DECAY, DROP_PROB, SAMPLING_FRACTION)
 results_dir = '%s/%s' % (OUTPUT_DIR, params)
@@ -56,9 +54,9 @@ if not os.path.exists(attention_vis_output_dir):
 
 ########## DATA LOADERS ##########
 dataset = WebDataset(DATA_DIR, test_img_ids, USE_CONTEXT, CONTEXT_SIZE, USE_ADDITIONAL_FEAT, sampling_fraction=1)
-n_additional_features = dataset.n_additional_features
-model = VAMWOD(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, BACKBONE, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, USE_BBOX_FEAT,
-               BBOX_HIDDEN_DIM, n_additional_features, TRAINABLE_CONVNET, DROP_PROB, CLASS_NAMES).to(device)
+n_additional_feat = dataset.n_additional_feat
+model = VAMWOD(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, USE_BBOX_FEAT,
+               BBOX_HIDDEN_DIM, n_additional_feat, DROP_PROB, CLASS_NAMES).to(device)
 model.load_state_dict(torch.load(model_save_file, map_location=device))
 model.eval()
 
@@ -69,7 +67,7 @@ for index, img_id in enumerate(test_img_ids):
 
     images = images.to(device) # [batch_size, 3, img_H, img_W]
     bboxes = bboxes.to(device) # [total_n_bboxes_in_batch, 5]
-    additional_features = additional_features.to(device) # [total_n_bboxes_in_batch, n_additional_features]
+    additional_features = additional_features.to(device) # [total_n_bboxes_in_batch, n_additional_feat]
     context_indices = context_indices.to(device) # [total_n_bboxes_in_batch, 2 * context_size]
     labels = labels.to(device) # [total_n_bboxes_in_batch]
     
