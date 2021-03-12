@@ -155,9 +155,9 @@ class GraphAttentionLayer(nn.Module):
         self.attention_layer = nn.Linear(2*self.hidden_dim, 1)
         self.leakyrelu = nn.LeakyReLU(alpha)
         
-        nn.init.xavier_uniform_(self.W_i.weight, gain=1.414)
-        nn.init.xavier_uniform_(self.W_j.weight, gain=1.414)
-        nn.init.xavier_uniform_(self.attention_layer.weight, gain=1.414)
+        # nn.init.xavier_uniform_(self.W_i.weight, gain=1.414)
+        # nn.init.xavier_uniform_(self.W_j.weight, gain=1.414)
+        # nn.init.xavier_uniform_(self.attention_layer.weight, gain=1.414)
 
     def forward(self, h_i, context_indices, return_attn_wts=False):
         """
