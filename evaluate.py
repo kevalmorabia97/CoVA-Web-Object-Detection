@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 from constants import Constants
 from datasets import custom_collate_fn, WebDataset
-from models import VAMWOD
+from models import CoVA
 from train import evaluate_model
 from utils import cmdline_args_parser, print_and_log
 
@@ -74,27 +74,24 @@ if __name__ == "__main__":
     ########## HYPERPARAMETERS ##########
     LEARNING_RATE = args.learning_rate
     BATCH_SIZE = args.batch_size
-    USE_CONTEXT = args.use_context
-    CONTEXT_SIZE = args.context_size if USE_CONTEXT else 0
-    USE_ATTENTION = args.attention if USE_CONTEXT else False
-    HIDDEN_DIM = args.hidden_dim if USE_CONTEXT and USE_ATTENTION else 0
+    CONTEXT_SIZE = args.context_size
+    use_context = CONTEXT_SIZE > 0
+    HIDDEN_DIM = args.hidden_dim if use_context else 0
     ROI_OUTPUT = (args.roi, args.roi)
-    USE_BBOX_FEAT = args.bbox_feat
-    BBOX_HIDDEN_DIM = args.bbox_hidden_dim if USE_BBOX_FEAT else 0
+    BBOX_HIDDEN_DIM = args.bbox_hidden_dim
     USE_ADDITIONAL_FEAT = args.additional_feat
     WEIGHT_DECAY = args.weight_decay
     DROP_PROB = args.drop_prob
     SAMPLING_FRACTION = args.sampling_fraction if (args.sampling_fraction >= 0 and args.sampling_fraction <= 1) else 1
 
-    params = 'lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d bbhd-%d af-%d wd-%.0e dp-%.1f sf-%.1f' % (LEARNING_RATE,
-        BATCH_SIZE, USE_CONTEXT, CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM, ROI_OUTPUT[0], USE_BBOX_FEAT, BBOX_HIDDEN_DIM,
-        USE_ADDITIONAL_FEAT, WEIGHT_DECAY, DROP_PROB, SAMPLING_FRACTION)
+    params = 'lr-%.0e batch-%d cs-%d hd-%d roi-%d bbhd-%d af-%d wd-%.0e dp-%.1f sf-%.1f' % (LEARNING_RATE, BATCH_SIZE,
+        CONTEXT_SIZE, HIDDEN_DIM, ROI_OUTPUT[0], BBOX_HIDDEN_DIM, USE_ADDITIONAL_FEAT, WEIGHT_DECAY, DROP_PROB, SAMPLING_FRACTION)
     results_dir = '%s/%s' % (OUTPUT_DIR, params)
 
     assert os.path.exists(results_dir), 'Model does not seem to have been trained (run main.py) with the hyperparameters you provided'
 
     ########## TEST DATA LOADER ##########
-    test_dataset = WebDataset(DATA_DIR, test_img_ids, USE_CONTEXT, CONTEXT_SIZE, USE_ADDITIONAL_FEAT, sampling_fraction=1)
+    test_dataset = WebDataset(DATA_DIR, test_img_ids, CONTEXT_SIZE, USE_ADDITIONAL_FEAT, sampling_fraction=1)
     test_loader = DataLoader(test_dataset, batch_size=10, shuffle=False, num_workers=5,
                             collate_fn=custom_collate_fn, drop_last=False)
     n_additional_feat = test_dataset.n_additional_feat
@@ -105,8 +102,8 @@ if __name__ == "__main__":
     model_save_file = '%s/Fold-%s saved_model.pth' % (results_dir, CV_FOLD)
 
     ########## RESTORE TRAINED MODEL ##########
-    model = VAMWOD(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, USE_BBOX_FEAT,
-                   BBOX_HIDDEN_DIM, n_additional_feat, DROP_PROB, CLASS_NAMES).to(device)
+    model = CoVA(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, use_context, HIDDEN_DIM, BBOX_HIDDEN_DIM, 
+                 n_additional_feat, DROP_PROB, CLASS_NAMES).to(device)
     model.load_state_dict(torch.load(model_save_file, map_location=device))
     
     evaluate(model, test_loader, device, log_file, test_acc_imgwise_file, webpage_info, test_domains, test_acc_domainwise_file)

@@ -1,2 +1,2 @@
-# VAMWOD-Web-Object-Detection-PyTorch
-Implementation of our Visual Attention-based Model for Webpage Object Detection (VAMWOD)
+# CoVA-Web-Object-Detection-PyTorch
+Implementation of our paper CoVA: Context-aware Visual Attention for Webpage Information Extraction

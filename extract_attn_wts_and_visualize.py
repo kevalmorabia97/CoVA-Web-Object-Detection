@@ -5,7 +5,7 @@ import torch
 
 from constants import Constants
 from datasets import WebDataset, custom_collate_fn
-from models import VAMWOD
+from models import CoVA
 from utils import visualize_bbox
 
 
@@ -30,21 +30,20 @@ test_img_ids = np.loadtxt('%s/test_imgs.txt' % FOLD_DIR, str)
 # Parameters of model for which visualizations are to be created
 LEARNING_RATE = 5e-4
 BATCH_SIZE = 5
-USE_CONTEXT = True # this should be True
 CONTEXT_SIZE = 12
-USE_ATTENTION = True # this should be True
+use_context = CONTEXT_SIZE > 0
 HIDDEN_DIM = 384
 ROI_OUTPUT = (3, 3)
-USE_BBOX_FEAT = True
 BBOX_HIDDEN_DIM = 32
 USE_ADDITIONAL_FEAT = False
 WEIGHT_DECAY = 1e-3
 DROP_PROB = 0.2
 SAMPLING_FRACTION = 0.9
 
-params = 'lr-%.0e batch-%d c-%d cs-%d att-%d hd-%d roi-%d bbf-%d bbhd-%d af-%d wd-%.0e dp-%.1f sf-%.1f' % (LEARNING_RATE,
-    BATCH_SIZE, USE_CONTEXT, CONTEXT_SIZE, USE_ATTENTION, HIDDEN_DIM, ROI_OUTPUT[0], USE_BBOX_FEAT, BBOX_HIDDEN_DIM,
-    USE_ADDITIONAL_FEAT, WEIGHT_DECAY, DROP_PROB, SAMPLING_FRACTION)
+assert CONTEXT_SIZE > 0, 'Attention Scores can only be computed if CONTEXT_SIZE > 0'
+
+params = 'lr-%.0e batch-%d cs-%d hd-%d roi-%d bbhd-%d af-%d wd-%.0e dp-%.1f sf-%.1f' % (LEARNING_RATE, BATCH_SIZE,
+    CONTEXT_SIZE, HIDDEN_DIM, ROI_OUTPUT[0], BBOX_HIDDEN_DIM, USE_ADDITIONAL_FEAT, WEIGHT_DECAY, DROP_PROB, SAMPLING_FRACTION)
 results_dir = '%s/%s' % (OUTPUT_DIR, params)
 model_save_file = '%s/Fold-%s saved_model.pth' % (results_dir, CV_FOLD)
 
@@ -53,60 +52,39 @@ if not os.path.exists(attention_vis_output_dir):
     os.makedirs(attention_vis_output_dir)
 
 ########## DATA LOADERS ##########
-dataset = WebDataset(DATA_DIR, test_img_ids, USE_CONTEXT, CONTEXT_SIZE, USE_ADDITIONAL_FEAT, sampling_fraction=1)
+dataset = WebDataset(DATA_DIR, test_img_ids, CONTEXT_SIZE, USE_ADDITIONAL_FEAT, sampling_fraction=1)
 n_additional_feat = dataset.n_additional_feat
-model = VAMWOD(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, USE_CONTEXT, USE_ATTENTION, HIDDEN_DIM, USE_BBOX_FEAT,
-               BBOX_HIDDEN_DIM, n_additional_feat, DROP_PROB, CLASS_NAMES).to(device)
+model = CoVA(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, use_context, HIDDEN_DIM, BBOX_HIDDEN_DIM, 
+             n_additional_feat, DROP_PROB, CLASS_NAMES).to(device)
 model.load_state_dict(torch.load(model_save_file, map_location=device))
 model.eval()
 
 for index, img_id in enumerate(test_img_ids):
     print(img_id)
     
-    _, images, bboxes, additional_features, context_indices, labels = custom_collate_fn([dataset.__getitem__(index)])
+    _, images, bboxes, additional_feats, context_indices, labels = custom_collate_fn([dataset.__getitem__(index)])
 
     images = images.to(device) # [batch_size, 3, img_H, img_W]
     bboxes = bboxes.to(device) # [total_n_bboxes_in_batch, 5]
-    additional_features = additional_features.to(device) # [total_n_bboxes_in_batch, n_additional_feat]
+    additional_feats = additional_feats.to(device) # [total_n_bboxes_in_batch, n_additional_feat]
     context_indices = context_indices.to(device) # [total_n_bboxes_in_batch, 2 * context_size]
     labels = labels.to(device) # [total_n_bboxes_in_batch]
     
-    batch_size = bboxes.shape[0]
+    N = bboxes.shape[0]
     with torch.no_grad():
-        ##### BBOX FEATURES #####
         bbox_coords = bboxes[:, 1:].clone() # discard batch_img_index column
         bbox_coords[:, 2:] -= bbox_coords[:, :2] # convert to [top_left_x, top_left_y, width, height]
 
         zero_bbox_coords = torch.zeros(4).view(1,-1).to(device)
         bbox_coords_padded = torch.cat((bbox_coords, zero_bbox_coords), dim=0)
-        context_bbox_coords = bbox_coords_padded[context_indices.view(-1)].view(batch_size,-1) # [batch_size, 2 * context_size * 4]
+        context_bbox_coords = bbox_coords_padded[context_indices.view(-1)].view(N,-1) # [N, 2 * context_size * 4]
 
-        if USE_BBOX_FEAT:
-            bbox_asp_ratio = (bbox_coords[:, 2]/bbox_coords[:, 3]).view(batch_size, 1)
-            bbox_features = torch.cat((bbox_coords, bbox_asp_ratio), dim=1)
-            
-            bbox_features = model.bbox_feat_encoder(bbox_features)
-        else:
-            bbox_features = bboxes[:, :0] # size [n_bboxes, 0]
-        
-        ##### OWN VISUAL + BBOX FEATURES #####
-        own_features = model.roi_pool(model.convnet(images), bboxes).view(batch_size, model.n_visual_feat)
-        additional_features = model.bn_additional_feat(additional_features)
-        own_features = torch.cat((own_features, bbox_features, additional_features), dim=1)
+        visual_feats = model._get_visual_features(images, bboxes)
+        bbox_feats = model._get_bbox_features(bboxes)
+        additional_feats = model.bn_additional_feat(additional_feats)
+        own_features = torch.cat((visual_feats, bbox_feats, additional_feats), dim=1)
 
-        ##### CONTEXT VISUAL + BBOX FEATURES USING SELF-ATTENTION #####
-        n_context = context_indices.shape[1]
-        zero_feat = torch.zeros((1, model.n_own_feat)).to(images.device) # for -1 contexts i.e. extra padded
-        own_feat_padded = torch.cat((own_features, zero_feat), dim=0)
-        value = own_feat_padded[context_indices.view(-1)].view(batch_size, n_context, model.n_context_feat) # context_features
-
-        attention_wts = []
-        query = model.q_encoder(own_features) # [batch_size, hidden_dim]
-        for c in range(n_context):
-            key = model.k_encoder(value[:, c, :]) # [batch_size, hidden_dim]
-            curr_attention_wt = model.attention_layer(torch.cat((query, key), dim=1)) # [batch_size, 1]
-            attention_wts.append(curr_attention_wt)
-        attention_wts = torch.softmax(torch.cat(attention_wts, dim=1), dim=1) # [batch_size, n_context]
+        _, attention_wts = model.gat(own_features, context_indices, return_attn_wts=True)
 
     bbox_coords = bbox_coords[labels > 0] # [x, y, w, h]
     context_bbox_coords = context_bbox_coords[labels > 0]

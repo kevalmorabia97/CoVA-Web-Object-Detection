@@ -6,31 +6,27 @@ import torchvision
 from utils import count_parameters
 
 
-class VAMWOD(nn.Module):
-    def __init__(self, roi_output_size, img_H, n_classes, use_context=True, use_attention=True, hidden_dim=384, 
-                 use_bbox_feat=True, bbox_hidden_dim=32, n_additional_feat=0, drop_prob=0.2, class_names=None):
+class CoVA(nn.Module):
+    def __init__(self, roi_output_size, img_H, n_classes, use_context=True, hidden_dim=384, bbox_hidden_dim=32, 
+                 n_additional_feat=0, drop_prob=0.2, class_names=None):
         """
-        Implementation of our Visual Attention-based Model for Webpage Object Detection (VAMWOD)
+        Implementation of CoVA: Context-aware Visual Attention for Webpage Information Extraction
 
         roi_output_size: Tuple (int, int) which will be output of the roi_pool layer for each channel of convnet_feature
         img_H: height of image given as input to the convnet. Image assumed to be of same W and H
         n_classes: num of classes for BBoxes
-        use_context: if True, use context for context_representation along with h_i (default: True) 
-        use_attention: if True, learn scores for all n_context contexts and take weighted avg for context_representation
-            NOTE: this parameter is not used if use_context=False
-        hidden_dim: size of hidden contextual representation, used when use_attention=True (default: 384)
-        use_bbox_feat: if True, then use [x,y,w,h,asp_ratio] with convnet visual features (default: True)
-        bbox_hidden_dim: size of hidden representation of 5 bbox features, used when use_bbox_feat=True (default: 32)
+        use_context: if True, use context for context_representation (using GAT) along with h_i (default: True) 
+        hidden_dim: size of hidden contextual representation, used when use_context=True (default: 384)
+        bbox_hidden_dim: if > 0, size of hidden representation of [x,y,w,h,asp_ratio] bbox features (default: 32)
         n_additional_feat: num of additional features for each bbox to be used along with visual and bbox features
         drop_prob: dropout probability (default: 0.2)
         class_names: list of n_classes string elements containing names of the classes (default: [0, 1, ..., n_classes-1])
         """
-        super(VAMWOD, self).__init__()
+        super(CoVA, self).__init__()
 
         self.n_classes = n_classes
         self.use_context = use_context
-        self.use_attention = use_attention
-        self.use_bbox_feat = use_bbox_feat
+        self.hidden_dim = hidden_dim
         self.bbox_hidden_dim = bbox_hidden_dim
         self.n_additional_feat = n_additional_feat
         self.class_names = np.arange(self.n_classes).astype(str) if class_names is None else class_names
@@ -48,13 +44,12 @@ class VAMWOD(nn.Module):
         self.roi_pool = torchvision.ops.RoIPool(roi_output_size, spatial_scale)
 
         self.n_visual_feat = _convnet_output_size[1] * roi_output_size[0] * roi_output_size[1]
-        self.n_bbox_feat = self.bbox_hidden_dim if self.use_bbox_feat else 0 # [x,y,w,h,asp_rat] of BBox encoded to n_bbox_feat
-        self.n_feat = self.n_visual_feat + self.n_bbox_feat + self.n_additional_feat
+        self.n_feat = self.n_visual_feat + self.bbox_hidden_dim + self.n_additional_feat
 
-        if self.use_bbox_feat:
+        if self.bbox_hidden_dim > 0:
             self.bbox_feat_encoder = nn.Sequential(
-                nn.Linear(5, self.n_bbox_feat),
-                nn.BatchNorm1d(self.n_bbox_feat),
+                nn.Linear(5, self.bbox_hidden_dim),
+                nn.BatchNorm1d(self.bbox_hidden_dim),
                 nn.ReLU(),
             )
         
@@ -64,11 +59,11 @@ class VAMWOD(nn.Module):
             self.bn_additional_feat = lambda x: x
 
         ##### GRAPH ATTENTION LATER (GAT) #####
-        if self.use_context and self.use_attention:
-            self.gat = GraphAttentionLayer(self.n_feat, hidden_dim)
+        if self.use_context:
+            self.gat = GraphAttentionLayer(self.n_feat, self.hidden_dim)
         
         ##### FC LAYERS #####
-        self.n_total_feat = self.n_feat + hidden_dim
+        self.n_total_feat = self.n_feat + self.hidden_dim
         self.decoder = nn.Sequential(
             nn.Dropout(drop_prob),
             nn.Linear(self.n_total_feat, self.n_total_feat),
@@ -102,14 +97,7 @@ class VAMWOD(nn.Module):
 
         ##### CONTEXT FEATURES USING GRAPH ATTENTION LAYER #####
         if self.use_context:
-            if self.use_attention:
-                context_representation = self.gat(own_features, context_indices)
-            else: # average of context features for context representation [N, n_feat]
-                n_context = context_indices.shape[1]
-                zero_feat = torch.zeros((1, self.n_feat)).to(images.device) # for -1 contexts i.e. extra padded
-                own_feat_padded = torch.cat((own_features, zero_feat), dim=0)
-                h_j = own_feat_padded[context_indices.view(-1)].view(N, n_context, self.n_feat) # context_features
-                context_representation = h_j.sum(dim=1) / (context_indices != -1).sum(dim=1).view(N, 1)
+            context_representation = self.gat(own_features, context_indices)
         else:
             context_representation = own_features[:, :0] # size [n_bboxes, 0]
 
@@ -126,7 +114,7 @@ class VAMWOD(nn.Module):
         """
         Get [x,y,w,h,asp_ratio] for each bbox and transform to n_bbox_feat if bbox fetaures are to be used
         """
-        if self.use_bbox_feat:
+        if self.bbox_hidden_dim > 0:
             bbox_feats = bboxes[:, 1:].clone() # discard batch_img_index column
             bbox_feats[:, 2:] -= bbox_feats[:, :2] # convert to [top_left_x, top_left_y, width, height]
             
