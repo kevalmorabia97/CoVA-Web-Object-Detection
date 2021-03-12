@@ -21,7 +21,7 @@ class WebDataset(torchvision.datasets.VisionDataset):
             context_size: number of BBoxes before and after to consider as context / graph neighborhood (int)
                 If set to 0, `context_indices` will be empty as it will not be used
             use_additional_feats: whether to use additional features (default: False)
-                if True, `root` directory must contain additional_feats/x.pkl additional features which is a numpy array of shape [n_bboxes, n_additional_feat]
+                if True, `root` directory must contain additional_features/x.pkl additional features which is a numpy array of shape [n_bboxes, n_additional_feat]
             sampling_fraction: randomly sample this many (float between 0 and 1) fraction of background boxes (class 0) while training (default: 1 --> no sampling, take all)
                 All samples of class > 0 are always taken
                 NOTE: For val and test data, sampling_fraction SHOULD be 1 (no sampling)
@@ -42,7 +42,7 @@ class WebDataset(torchvision.datasets.VisionDataset):
         self.all_bboxes = [pkl_load('%s/bboxes/%s.pkl' % (self.root, img_id)) for img_id in self.ids]
         
         if use_additional_feats:
-            self.all_additional_tensor_features = [torch.Tensor(pkl_load('%s/additional_feats/%s.pkl' % (self.root, img_id))) for img_id in self.ids]
+            self.all_additional_tensor_features = [torch.Tensor(pkl_load('%s/additional_features/%s.pkl' % (self.root, img_id))) for img_id in self.ids]
             self.n_additional_feat = len(self.all_additional_tensor_features[0][0])
         else:
             self.all_additional_tensor_features = [torch.empty(len(bboxes), 0) for bboxes in self.all_bboxes]
