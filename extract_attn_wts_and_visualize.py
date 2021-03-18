@@ -2,6 +2,7 @@ import numpy as np
 import os
 import sys
 import torch
+from tqdm import tqdm
 
 from constants import Constants
 from datasets import WebDataset, custom_collate_fn
@@ -59,9 +60,7 @@ model = CoVA(ROI_OUTPUT, IMG_HEIGHT, N_CLASSES, use_context, HIDDEN_DIM, BBOX_HI
 model.load_state_dict(torch.load(model_save_file, map_location=device))
 model.eval()
 
-for index, img_id in enumerate(test_img_ids):
-    print(img_id)
-    
+for index, img_id in tqdm(enumerate(test_img_ids), total=len(test_img_ids)):
     _, images, bboxes, additional_feats, context_indices, labels = custom_collate_fn([dataset.__getitem__(index)])
 
     images = images.to(device) # [batch_size, 3, img_H, img_W]

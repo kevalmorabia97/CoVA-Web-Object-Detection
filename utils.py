@@ -64,7 +64,7 @@ def set_all_seeds(seed=123):
 def visualize_bbox(img_path, attn_wt_file, img_save_dir):
     """
     Plot img and show all context bboxes on the img with attention scores
-    Target BBox is bold black, context bbox is either green (score >= 0.2) or red (score < 0.2)
+    Target BBox is bold red, context bbox is green with shade denoting score
     attn_wt_file is a csv file containing 3 rows, 5 + 10*context_size cols
     Each row contains plot data for a target class (Price, Title, Image)
     Cols: 4 bbox coords, 1 label, 2*context_size*4 context bbox coords, 2*context_size attnetion values that sum to 1
@@ -86,12 +86,12 @@ def visualize_bbox(img_path, attn_wt_file, img_save_dir):
         plt.imshow(img)
         plt.title('Attention Visualization for class: ' + class_names[int(row[4])])
         ax = plt.gca()
-        ax.add_patch(plt.Rectangle((row[0], row[1]), row[2], row[3], fill=False, edgecolor='black', linewidth=1.5))
+        ax.add_patch(plt.Rectangle((row[0], row[1]), row[2], row[3], fill=False, edgecolor='#fa4772', linewidth=1.5))
         for c in range(1, 2*context_size+1):
             if row[4*c+1] == 0 and row[4*c+2] == 0 and row[4*c+3] == 0 and row[4*c+4] == 0:
                 continue
-            ax.add_patch(plt.Rectangle((row[4*c+1], row[4*c+2]), row[4*c+3], row[4*c+4], fill=True, facecolor='red', alpha=0.75*row[4*(2*context_size+1) + c]))
-            ax.add_patch(plt.Rectangle((row[4*c+1], row[4*c+2]), row[4*c+3], row[4*c+4], fill=False, edgecolor='red', linewidth=0.75))
+            ax.add_patch(plt.Rectangle((row[4*c+1], row[4*c+2]), row[4*c+3], row[4*c+4], fill=True, facecolor='#43a047', alpha=0.75*row[4*(2*context_size+1) + c]))
+            ax.add_patch(plt.Rectangle((row[4*c+1], row[4*c+2]), row[4*c+3], row[4*c+4], fill=False, edgecolor='#43a047', linewidth=0.75))
         plt.axis('off')
         plt.tight_layout()
         plt.savefig('%s/%s_attn_%s.png' % (img_save_dir, img_path.rsplit('/',1)[-1][:-4], class_names[int(row[4])]), dpi=300, bbox_inches='tight', pad_inches=0)
