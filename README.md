@@ -34,7 +34,8 @@ This information is processed in four stages:
 
 The graph representation extraction computes for every web element _i_ its set of _K_ neighboring web elements _N<sub>i</sub>_. The _RN_ consists of a Convolutional Neural Net (_CNN_) and a positional encoder aimed to learn a visual representation _v<sub>i</sub>_ for each web element _i &isin; {1, ..., N}_. The _GAT_ combines the visual representation _v<sub>i</sub>_ of the web element _i_ to be classified and those of its neighbors, i.e., _v<sub>k</sub> &forall;k &isin; N<sub>i</sub>_ to compute the contextual representation _c<sub>i</sub>_ for web element _i_. Finally, the visual and contextual representations of the web element are concatenated and passed through the _FC_ layer to obtain the classification output.
 
-![Pipeline](imgs/CoVA-Architecture.jpg)
+![Pipeline](imgs/CoVA-architecture.jpg)
+
 ## Experimental Results
 ![Table of Comparison](imgs/performance-comparison.jpg)
 Cross Domain Accuracy (mean &pm; standard deviation) for 5-fold cross validation.
