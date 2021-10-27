@@ -47,7 +47,14 @@ NOTE: Cross Domain means we train the model on some web domains and test it on c
 Attention Visualizations where red border denotes web element to be classified, and its contexts have green shade whose intensity denotes score. Price in (a) get much more score than other contexts. Title and image in (b) are scored higher than other contexts for price.
 
 ## Cite
-If you find this useful in your research, please cite our ArXiv pre-print:
+If you find this useful in your research, please cite our [ArXiv pre-print](https://arxiv.org/abs/2110.12320):
 ```
-Coming soon!
+@misc{kumar2021cova,
+      title={CoVA: Context-aware Visual Attention for Webpage Information Extraction}, 
+      author={Anurendra Kumar and Keval Morabia and Jingjin Wang and Kevin Chen-Chuan Chang and Alexander Schwing},
+      year={2021},
+      eprint={2110.12320},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
 ```
