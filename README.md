@@ -1,8 +1,7 @@
 # CoVA: Context-aware Visual Attention for Webpage Information Extraction
 
 ## Abstract
-Webpage information extraction (WIE) is an important step to create knowledge bases. For this, classical WIE methods leverage the Document Object Model (DOM) tree of a website. However, use of the DOM tree poses significant challenges as context and appearance are encoded in an abstract manner. To address this challenge we propose to `reformulate WIE as a context-aware Webpage Object Detection task`. Specifically, we develop a Context-aware Visual Attention-based (CoVA) detection pipeline which combines appearance features with syntactical structure from the DOM tree. To study the approach we collect a `new large-scale dataset of e-commerce websites` for which we manually annotate every web element with four labels: product price, product title, product image and background. On this dataset we show that the proposed CoVA approach is a new challenging baseline which improves upon prior
-state-of-the-art methods.
+Webpage information extraction (WIE) is an important step to create knowledge bases. For this, classical WIE methods leverage the Document Object Model (DOM) tree of a website. However, use of the DOM tree poses significant challenges as context and appearance are encoded in an abstract manner. To address this challenge we propose to `reformulate WIE as a context-aware Webpage Object Detection` task. Specifically, we develop a Context-aware Visual Attention-based (CoVA) detection pipeline which combines appearance features with syntactical structure from the DOM tree. To study the approach we collect a `new large-scale datase of e-commerce websites` for which we manually annotate every web element with four labels: product price, product title, product image and others. On this dataset we show that the proposed CoVA approach is a new challenging baseline which improves upon prior state-of-the-art methods.
 
 <!--
 ## Key Contributions
