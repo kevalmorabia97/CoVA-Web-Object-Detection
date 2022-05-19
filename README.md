@@ -47,14 +47,23 @@ NOTE: Cross Domain means we train the model on some web domains and test it on c
 Attention Visualizations where red border denotes web element to be classified, and its contexts have green shade whose intensity denotes score. Price in (a) get much more score than other contexts. Title and image in (b) are scored higher than other contexts for price.
 
 ## Cite
-If you find this useful in your research, please cite our [ArXiv pre-print](https://arxiv.org/abs/2110.12320):
+If you find this useful in your research, please cite our [ACL 2022 Paper]([https://arxiv.org/abs/2110.12320](https://aclanthology.org/2022.ecnlp-1.11/)):
 ```
-@misc{kumar2021cova,
-      title={CoVA: Context-aware Visual Attention for Webpage Information Extraction}, 
-      author={Anurendra Kumar and Keval Morabia and Jingjin Wang and Kevin Chen-Chuan Chang and Alexander Schwing},
-      year={2021},
-      eprint={2110.12320},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV}
+@inproceedings{kumar-etal-2022-cova,
+    title = "{C}o{VA}: Context-aware Visual Attention for Webpage Information Extraction",
+    author = "Kumar, Anurendra  and
+      Morabia, Keval  and
+      Wang, William  and
+      Chang, Kevin  and
+      Schwing, Alex",
+    booktitle = "Proceedings of The Fifth Workshop on e-Commerce and NLP (ECNLP 5)",
+    month = may,
+    year = "2022",
+    address = "Dublin, Ireland",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2022.ecnlp-1.11",
+    pages = "80--90",
+    abstract = "Webpage information extraction (WIE) is an important step to create knowledge bases. For this, classical WIE methods leverage the Document Object Model (DOM) tree of a website. However, use of the DOM tree poses significant challenges as context and appearance are encoded in an abstract manner. To address this challenge we propose to reformulate WIE as a context-aware Webpage Object Detection task. Specifically, we develop a Context-aware Visual Attention-based (CoVA) detection pipeline which combines appearance features with syntactical structure from the DOM tree. To study the approach we collect a new large-scale datase of e-commerce websites for which we manually annotate every web element with four labels: product price, product title, product image and others. On this dataset we show that the proposed CoVA approach is a new challenging baseline which improves upon prior state-of-the-art methods.",
 }
+
 ```
