@@ -96,7 +96,7 @@ class WebDataset(torchvision.datasets.VisionDataset):
         img = Image.open(self.imgs_paths[index]).convert("RGB")
         img = self.img_transform(img)
 
-        bboxes = self.all_bboxes[index]
+        bboxes = self.all_bboxes[index].copy()
         additional_feats = self.all_additional_tensor_features[index]
         if self.sampling_fraction < 1:  # preserve order, include all non-BG bboxes
             sampled_bbox_idxs = np.random.permutation(bboxes.shape[0])[
