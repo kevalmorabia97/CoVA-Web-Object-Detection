@@ -16,7 +16,7 @@ In Proceedings of The Fifth Workshop on e-Commerce and NLP (ECNLP 5), Associatio
 ## CoVA Dataset
 We labeled _7,740_ webpages spanning _408_ domains (Amazon, Walmart, Target, etc.). Each of these webpages contains exactly one labeled price, title, and image. All other web elements are labeled as background. On average, there are _90_ web elements in a webpage.
 
-Webpage screenshots and bounding boxes can be obtained [here](https://drive.google.com/drive/folders/1LQPXGhDVh40bIT2-LZfo498M93tidABe?usp=sharing)
+Webpage screenshots and bounding boxes can be obtained [here](https://drive.google.com/drive/folders/1LcF40ZPrcRAc4RXyIVZGgmGf2LaQzjGK?usp=sharing)
 
 ### Train-Val-Test split
 We create a cross-domain split which ensures that each of the train, val and test sets contains webpages from different domains. Specifically, we construct a 3 : 1 : 1 split based on the number of distinct domains. We observed that the top-5 domains (based on number of samples) were Amazon, EBay, Walmart, Etsy, and Target. So, we created 5 different splits for 5-Fold Cross Validation such that each of the major domains is present in one of the 5 splits for test data. These splits can be accessed [here](splits/)
